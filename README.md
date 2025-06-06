@@ -17,6 +17,8 @@ Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis pr
 
 ### Kaggle code [LINK TO KAGGLE NOTEBOOK](https://www.kaggle.com/code/devmuiz/chest/edit)
 
+### Kaggle code [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
+
 ## Things to watch when trainning NN
 - Class imbalances
   - Test set and validation
