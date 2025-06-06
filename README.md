@@ -5,6 +5,7 @@ Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis pr
 - DeepLearning.AI
   - Attention in Transformers: Concepts and Code in PyTorch
   - How Transformer LLMs Work
+  - Open Source Models with Hugging Face
 
 ### Database 
 [LINK TO DOWNLOAD](https://nihcc.app.box.com/v/ChestXray-NIHCC)
