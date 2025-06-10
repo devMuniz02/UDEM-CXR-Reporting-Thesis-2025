@@ -10,6 +10,9 @@ Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis pr
   - LangChain Chat with Your Data
   - Building Generative AI Applications with Gradio
   - Functions, Tools and Agents with LangChain
+  - AI Python for Beginners
+  - How Diffusion Models Work
+  - Building Code Agents with Hugging Face smolagents
 
 ### Database 
 [LINK TO DOWNLOAD](https://nihcc.app.box.com/v/ChestXray-NIHCC)
