@@ -13,6 +13,9 @@ Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis pr
   - AI Python for Beginners
   - How Diffusion Models Work
   - Building Code Agents with Hugging Face smolagents
+  - Building and Evaluating Advanced RAG
+  - AI Agents in LangGraph
+  - Orchestrating Workflows for GenAI Applications
 
 ### Database 
 [LINK TO DOWNLOAD](https://nihcc.app.box.com/v/ChestXray-NIHCC)
