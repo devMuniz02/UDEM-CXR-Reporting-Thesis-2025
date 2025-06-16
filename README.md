@@ -2,6 +2,9 @@
 Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis project. PyTorch(or Tensorflow) + transformers on radiology datasets.
 
 ## Courses taken
+- Coursera
+  - AI for Medical Diagnosis
+ 
 - DeepLearning.AI
   - Attention in Transformers: Concepts and Code in PyTorch
   - How Transformer LLMs Work
