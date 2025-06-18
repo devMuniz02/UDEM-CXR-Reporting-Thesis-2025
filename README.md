@@ -1,27 +1,42 @@
 # Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025-
 Automated X-ray diagnosis (CNN) + AI report generation (LLM). UDEM PEF thesis project. PyTorch(or Tensorflow) + transformers on radiology datasets with deployment using dockers and kubernetes and kuberflow.
 
-## Courses taken
-- Coursera
-  - AI for Medical Diagnosis
- 
-- DeepLearning.AI
-  - Attention in Transformers: Concepts and Code in PyTorch
-  - How Transformer LLMs Work
-  - Open Source Models with Hugging Face
-  - LangChain for LLM Application Development
-  - LangChain Chat with Your Data
-  - Building Generative AI Applications with Gradio
-  - Functions, Tools and Agents with LangChain
-  - AI Python for Beginners
-  - How Diffusion Models Work
-  - Building Code Agents with Hugging Face smolagents
-  - Building and Evaluating Advanced RAG
-  - AI Agents in LangGraph
-  - Orchestrating Workflows for GenAI Applications
+# 🐳 How to Run with Docker Locally
 
-### Database 
-[LINK TO DOWNLOAD](https://nihcc.app.box.com/v/ChestXray-NIHCC)
+This guide walks you through running the Chest X-ray Report Generator using Docker.
+
+---
+
+## 🚀 Run with Docker
+
+Follow these steps to build and run the application using Docker:
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/pef-thesis.git
+cd pef-thesis
+```
+### 2. Build the Docker Image
+```bash
+docker compose build
+```
+### 3. Run the Container
+```bash
+docker compose up
+```
+-  #### 🛑 To stop it later:
+    ```bash
+    docker compose down
+    ```
+### 4. Access the App
+Once the container is running, open your browser and go to http://localhost:8000
+
+## Database 
+
+[LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
+
+[LINK TO DOWNLOAD ORIGINAL NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC)
 
 [LINK TO KAGGLE](https://www.kaggle.com/datasets/nih-chest-xrays/data)
 
