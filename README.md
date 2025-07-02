@@ -46,6 +46,8 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 ### Other paper [LINK](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1002686)
 
+### Other paper [LINK](https://arxiv.org/pdf/1711.05225)
+
 ### Kaggle code example [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
 
 
