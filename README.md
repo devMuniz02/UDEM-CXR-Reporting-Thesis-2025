@@ -48,6 +48,8 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 ### Other paper [LINK](https://arxiv.org/pdf/1711.05225)
 
+### [LINK](https://arxiv.org/abs/1409.0473)
+
 ### Kaggle code example [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
 
 
