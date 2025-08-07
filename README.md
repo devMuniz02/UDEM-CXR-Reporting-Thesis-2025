@@ -40,6 +40,8 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 [LINK TO KAGGLE](https://www.kaggle.com/datasets/nih-chest-xrays/data)
 
+## Papers
+
 ### Original paper [LINK TO PAPER](https://arxiv.org/abs/1705.02315)
 
 ### Other papers with same database [LINK](https://paperswithcode.com/dataset/chestx-ray8)
@@ -51,6 +53,10 @@ Once the container is running, open your browser and go to http://localhost:8000
 ### [LINK](https://arxiv.org/abs/1409.0473)
 
 ### [LINK](https://arxiv.org/abs/1706.03762)
+
+### [LLM ChestXAgent](https://stanford-aimi.github.io/chexagent.html)
+
+## Code
 
 ### Kaggle code example [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
 
