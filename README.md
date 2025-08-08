@@ -42,19 +42,25 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 ## Papers
 
-### Original paper [LINK TO PAPER](https://arxiv.org/abs/1705.02315)
+### [ChestX-ray8](https://arxiv.org/abs/1705.02315)
 
-### Other papers with same database [LINK](https://paperswithcode.com/dataset/chestx-ray8)
+### [CheXNeXt](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1002686)
 
-### Other paper [LINK](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1002686)
+### [CheXNet](https://arxiv.org/pdf/1711.05225)
 
-### Other paper [LINK](https://arxiv.org/pdf/1711.05225)
+### [Other papers with same database](https://paperswithcode.com/dataset/chestx-ray8) NO LONGER WORKS, IT NOW REDIRECTS TO THEIR GITHUB
 
-### [LINK](https://arxiv.org/abs/1409.0473)
+## GitHub projects
 
-### [LINK](https://arxiv.org/abs/1706.03762)
+### [LLM ChestXAgent Page](https://stanford-aimi.github.io/chexagent.html)
 
-### [LLM ChestXAgent](https://stanford-aimi.github.io/chexagent.html)
+### [LLM ChestXAgent GitHub](https://github.com/Stanford-AIMI/CheXagent)
+
+## Papers Attention for LLM Theory
+
+### [First attention](https://arxiv.org/abs/1409.0473)
+
+### [First transformer](https://arxiv.org/abs/1706.03762)
 
 ## Code
 
