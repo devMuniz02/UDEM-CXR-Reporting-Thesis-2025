@@ -47,6 +47,7 @@ Once the container is running, open your browser and go to http://localhost:8000
 - [NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC)
     - [Paper](https://arxiv.org/pdf/2405.19538v1)
 - [PadChest](https://bimcv.cipf.es/bimcv-projects/padchest/) -> Grounded-Reporting -> [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/)
+    - [Paper](https://arxiv.org/pdf/2411.05085)
 - [VinDR](https://www.physionet.org/content/vindr-cxr/1.0.0/) - Restricted-access
 - [MIDRC](https://www.midrc.org/) - Couldn't find the exact link to download
 - JF Healthcare - Not available
@@ -58,6 +59,18 @@ Once the container is running, open your browser and go to http://localhost:8000
 - [LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
 
 ## Papers
+
+| Paper (link) | Year | Dataset (patients / images) | Model used | AUC (per-label → macro-mean) |
+|---|---:|---|---|---|
+| [ChestX-ray8: Hospital-Scale Chest X-ray Database and Benchmarks](https://openaccess.thecvf.com/content_cvpr_2017/papers/Wang_ChestX-ray8_Hospital-Scale_Chest_CVPR_2017_paper.pdf) | 2017 | ChestX-ray8 (32,717 / 108,948) | ResNet-50 (CNN) | Atelectasis 0.7069; Cardiomegaly 0.8141; Effusion 0.7362; Infiltration 0.6128; Mass 0.5609; Nodule 0.7164; Pneumonia 0.6333; Pneumothorax 0.7891 → **0.696** |
+| [CheXNet: Radiologist-Level Pneumonia Detection on Chest X-rays with Deep Learning](https://arxiv.org/pdf/1711.05225) | 2017 | ChestX-ray14 (30,805 / 112,120) | DenseNet-121 (CNN) | Atelectasis 0.8094; Cardiomegaly 0.9248; Effusion 0.8638; Infiltration 0.7345; Mass 0.8676; Nodule 0.7802; Pneumonia 0.7680; Pneumothorax 0.8887; Consolidation 0.7901; Edema 0.8878; Emphysema 0.9371; Fibrosis 0.8047; Pleural Thickening 0.8062; Hernia 0.9164 → **0.841** |
+| [Learning to Diagnose from Scratch by Exploiting Dependencies Among Labels](https://arxiv.org/abs/1710.10501) | 2017 | ChestX-ray14 (30,805 / 112,120) | DenseNet + LSTM (CNN+RNN) | Atelectasis 0.772; Cardiomegaly 0.904; Effusion 0.859; Infiltration 0.695; Mass 0.792; Nodule 0.717; Pneumonia 0.713; Pneumothorax 0.841; Consolidation 0.788; Edema 0.882; Emphysema 0.829; Fibrosis 0.767; Pleural Thickening 0.765; Hernia 0.914 → **0.803** |
+| [CheXpert: A Large Chest Radiograph Dataset with Uncertainty Labels and Expert Comparison](https://ojs.aaai.org/index.php/AAAI/article/view/3834) | 2019 | CheXpert (65,240 / 224,316) | DenseNet-121 ensemble (CNN) | Pleural Effusion **0.97**; Atelectasis **0.85**; Cardiomegaly ≥0.90; Consolidation ≥0.90; Edema ≥0.90 → **≈0.92** (5 labels) |
+| [CheXzero: Expert-level detection of pathologies from unannotated chest X-rays via self-supervised learning](https://www.nature.com/articles/s41551-022-00936-9) | 2022 | CheXpert (65,240 / 224,316; eval on expert test) | CLIP-style image-text (ViL) | Pleural Effusion 0.958; Edema 0.961; Atelectasis 0.798; Consolidation 0.871; Cardiomegaly 0.898 → **0.889** |
+| [SwinCheX: Multi-label Classification on Chest X-ray Images Using Vision Transformers](https://arxiv.org/pdf/2206.04246) | 2022 | ChestX-ray14 (~30,850 / 112,120) | Swin Transformer + multi-head MLP (ViT) | Cardiomegaly 0.875; Emphysema 0.914; Edema 0.848; Hernia 0.855; Pneumothorax 0.871; Effusion 0.824; Mass 0.822; Fibrosis 0.826; Atelectasis 0.781; Consolidation 0.748; Pleural Thickening 0.778; Nodule 0.780; Pneumonia 0.713; Infiltration 0.701 → **0.810** |
+| [LT-ViT: A Vision Transformer for Multi-label Chest X-ray Classification](https://ar5iv.org/pdf/2311.07263) | 2023 | NIH-CXR14 (30,805 / 112,120); CheXpert (65,240 / 224,316) | ViT-Small + Label Tokens (ViT) | NIH-14 **0.8198**; CheXpert-5 **0.8890**; CheXpert-13 **0.7734** |
+| [Anatomy-XNet: An Anatomy-Aware CNN for Thoracic Disease Classification](https://arxiv.org/abs/2106.05915) | 2021 | NIH-CXR14; CheXpert; (MIMIC-CXR also reported) | DenseNet-121 + anatomy-aware attention (CNN) | Macro AUCs: NIH **0.8578**; CheXpert **0.9207**; MIMIC-CXR **0.8404** |
+
 
 - [CheXNet](https://arxiv.org/pdf/1711.05225)
 - [CheXNeXt](https://journals.plos.org/plosmedicine/article?id=10.1371/journal.pmed.1002686)
