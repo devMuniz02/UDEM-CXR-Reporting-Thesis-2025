@@ -37,11 +37,11 @@ Once the container is running, open your browser and go to http://localhost:8000
 <img width="620" height="277" alt="image" src="https://github.com/user-attachments/assets/c4b2ea25-1c54-4ba4-8057-40bfdbdb6a1a" />
 
 - [MIMIC-CXR](https://physionet.org/content/mimic-cxr/2.1.0/) - Restricted-access
-- [OpenI](https://pubmed.ncbi.nlm.nih.gov/26133894/) - aka ChestX-ray14
+- [OpenI](https://pubmed.ncbi.nlm.nih.gov/26133894/)
 - [CheXpert](https://stanfordmlgroup.github.io/competitions/chexpert/)
 - [BraX](https://physionet.org/content/brax/1.1.0/) - Restricted-access
 - [CandidPTX](https://ourarchive.otago.ac.nz/esploro/outputs/dataset/CANDID-PTX/9926556140101891) - Closed access to users outside Health New Zealand
-- [NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC) - 
+- [NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC) - aka ChestX-ray14
 - [PadChest](https://bimcv.cipf.es/bimcv-projects/padchest/) -> Grounded-Reporting -> [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/)
 - [VinDR](https://www.physionet.org/content/vindr-cxr/1.0.0/) - Restricted-access
 - [MIDRC](https://www.midrc.org/) - Couldn't find the exact link to download
