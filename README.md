@@ -67,25 +67,19 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 <img width="521" height="160" alt="image" src="https://github.com/user-attachments/assets/1a5b6d1c-dd60-4edc-83f5-7b0e09033261" />
 
-- LLaVA-OV
+- [LLaVA-OV (OneVision)](https://arxiv.org/abs/2408.03326) – *LLaVA-OneVision: Easy Visual Task Transfer*  
+- [LLaVA-Med](https://arxiv.org/abs/2306.00890) – *LLaVA-Med: Training a Large Language-and-Vision Assistant for Biomedicine in One Day*  
+- [RaDialog](https://arxiv.org/abs/2311.18681) – *RaDialog: A Large Vision-Language Model for Radiology Report Generation and Conversational Assistance*  
+- [CheXagent](https://arxiv.org/abs/2401.12208) – *CheXagent: Towards a Foundation Model for Chest X-Ray Interpretation*  
+    - [Page](https://stanford-aimi.github.io/chexagent.html)  
+    - [GitHub](https://github.com/Stanford-AIMI/CheXagent)  
+- [MAIRA](https://www.microsoft.com/en-us/research/project/project-maira/) *(Multimodal AI for Radiology Applications)* – Microsoft Health Futures Research  
+    - [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/) Dataset  
+    - Chest X-ray (CXR)-specialised multimodal report generation model [MAIRA-2](https://arxiv.org/pdf/2406.04449)  
+    - [RAD-DINO](https://arxiv.org/pdf/2401.10815) Biomedical image encoder  
+- [RadVLM](https://arxiv.org/abs/2502.03333) – *RadVLM: A Multitask Conversational Vision-Language Model for Radiology*  
 
-- LLaVA-Med
-
-- RaDialog
-
-- ChestXAgent
-    - [Page](https://stanford-aimi.github.io/chexagent.html)
-    - [GitHub](https://github.com/Stanford-AIMI/CheXagent)
-
-- [MAIRA](https://www.microsoft.com/en-us/research/project/project-maira/) *(Multimodal AI for Radiology Applications)*  - Microsoft Health Futures Research 
-
-    - [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/) Dataset
-    - Chest X-ray (CXR)-specialised multimodal report generation model [MAIRA-2](https://arxiv.org/pdf/2406.04449)
-    - [RAD-DINO](https://arxiv.org/pdf/2401.10815) Biomedical image encoder
-
-- [RadVLM](https://arxiv.org/pdf/2502.03333)
-
-## VLMs F1-Score
+## VLMs Classification F1-Score
 
 <img width="648" height="381" alt="image" src="https://github.com/user-attachments/assets/76f15148-f9e3-4094-80e5-3c76888f11d0" />
 
