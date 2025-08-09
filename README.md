@@ -32,7 +32,7 @@ docker compose up
 ### 4. Access the App
 Once the container is running, open your browser and go to http://localhost:8000
 
-## Database 
+## NIH Database 
 
 [LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
 
@@ -55,6 +55,20 @@ Once the container is running, open your browser and go to http://localhost:8000
 ### [LLM ChestXAgent Page](https://stanford-aimi.github.io/chexagent.html)
 
 ### [LLM ChestXAgent GitHub](https://github.com/Stanford-AIMI/CheXagent)
+
+## Project [MAIRA](https://www.microsoft.com/en-us/research/project/project-maira/) *(Multimodal AI for Radiology Applications)*  - Microsoft Health Futures Research 
+
+### [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/) Database
+
+### Chest X-ray (CXR)-specialised multimodal report generation model [MAIRA-2](https://arxiv.org/pdf/2406.04449)
+
+### [RAD-DINO](https://arxiv.org/pdf/2401.10815) Biomedical image encoder
+
+## Models for Healthcare Available on Azure AI Foundry
+
+### [CXRReportGen](https://learn.microsoft.com/en-us/azure/ai-foundry/how-to/healthcare-ai/deploy-cxrreportgen) - grounded report generation model for chest X-rays. This multimodal AI model incorporates current and prior images, along with key patient information, to generate detailed, structured reports from chest X-rays. The reports highlight AI-generated findings based directly on the images, to align with human-in-the-loop workflows.
+
+### [MedImageInsight](https://learn.microsoft.com/en-us/azure/ai-foundry/how-to/healthcare-ai/deploy-medimageinsight) - embedding model that enables sophisticated image analysis, including classification and similarity search in medical imaging. Researchers can use the model embeddings in simple zero-shot classifiers. They can also build adapters for their specific tasks, thereby streamlining workflows in radiology, pathology, ophthalmology, dermatology, and other modalities. 
 
 ## Papers Attention for LLM Theory
 
