@@ -40,6 +40,10 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 [LINK TO KAGGLE](https://www.kaggle.com/datasets/nih-chest-xrays/data)
 
+## Chest X-Ray Datasets
+
+<img width="620" height="277" alt="image" src="https://github.com/user-attachments/assets/c4b2ea25-1c54-4ba4-8057-40bfdbdb6a1a" />
+
 ## Papers
 
 ### [ChestX-ray8](https://arxiv.org/abs/1705.02315)
@@ -50,19 +54,31 @@ Once the container is running, open your browser and go to http://localhost:8000
 
 ### [Other papers with same database](https://paperswithcode.com/dataset/chestx-ray8) NO LONGER WORKS, IT NOW REDIRECTS TO THEIR GITHUB
 
-## GitHub projects
+# VLMs Vision-language models
+
+<img width="521" height="160" alt="image" src="https://github.com/user-attachments/assets/1a5b6d1c-dd60-4edc-83f5-7b0e09033261" />
+
+## LLaVA-OV
+
+## LLaVA-Med
+
+## RaDialog
+
+## ChestXAgent
 
 ### [LLM ChestXAgent Page](https://stanford-aimi.github.io/chexagent.html)
 
 ### [LLM ChestXAgent GitHub](https://github.com/Stanford-AIMI/CheXagent)
 
-## Project [MAIRA](https://www.microsoft.com/en-us/research/project/project-maira/) *(Multimodal AI for Radiology Applications)*  - Microsoft Health Futures Research 
+## [MAIRA](https://www.microsoft.com/en-us/research/project/project-maira/) *(Multimodal AI for Radiology Applications)*  - Microsoft Health Futures Research 
 
 ### [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/) Database
 
 ### Chest X-ray (CXR)-specialised multimodal report generation model [MAIRA-2](https://arxiv.org/pdf/2406.04449)
 
 ### [RAD-DINO](https://arxiv.org/pdf/2401.10815) Biomedical image encoder
+
+## RadVLM
 
 ## Models for Healthcare Available on Azure AI Foundry
 
