@@ -32,17 +32,25 @@ docker compose up
 ### 4. Access the App
 Once the container is running, open your browser and go to http://localhost:8000
 
-## NIH Database 
-
-[LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
-
-[LINK TO DOWNLOAD ORIGINAL NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC)
-
-[LINK TO KAGGLE](https://www.kaggle.com/datasets/nih-chest-xrays/data)
-
 ## Chest X-Ray Datasets
 
 <img width="620" height="277" alt="image" src="https://github.com/user-attachments/assets/c4b2ea25-1c54-4ba4-8057-40bfdbdb6a1a" />
+
+- [MIMIC-CXR](https://physionet.org/content/mimic-cxr/2.1.0/) - Restricted-access
+- [OpenI](https://pubmed.ncbi.nlm.nih.gov/26133894/) - aka ChestX-ray14
+- [CheXpert](https://stanfordmlgroup.github.io/competitions/chexpert/)
+- [BraX](https://physionet.org/content/brax/1.1.0/) - Restricted-access
+- [CandidPTX](https://ourarchive.otago.ac.nz/esploro/outputs/dataset/CANDID-PTX/9926556140101891) - Closed access to users outside Health New Zealand
+- [NIH](https://nihcc.app.box.com/v/ChestXray-NIHCC) - 
+- [PadChest](https://bimcv.cipf.es/bimcv-projects/padchest/) -> Grounded-Reporting -> [PadChest-GR](https://bimcv.cipf.es/bimcv-projects/padchest-gr/)
+- [VinDR](https://www.physionet.org/content/vindr-cxr/1.0.0/) - Restricted-access
+- [MIDRC](https://www.midrc.org/) - Couldn't find the exact link to download
+- JF Healthcare - Not available
+- [CheXpert Plus](https://aimi.stanford.edu/datasets/chexpert-plus)
+
+### PEF Dataset - NIH and/or CheXpert Plus
+
+- [LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
 
 ## Papers
 
@@ -93,6 +101,8 @@ Once the container is running, open your browser and go to http://localhost:8000
 ### [First transformer](https://arxiv.org/abs/1706.03762)
 
 ## Code
+
+- [LINK TO DRIVE](https://drive.google.com/drive/u/0/folders/0AConL2XD0ndHUk9PVA)
 
 ### Kaggle code example [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
 
