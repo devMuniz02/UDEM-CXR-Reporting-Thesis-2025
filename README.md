@@ -42,8 +42,10 @@ Once the container is running, open your browser and go to http://localhost:8000
   - Convolutional Neural Networks
     - [ResNet](https://arxiv.org/abs/1512.03385)
     - [UNet](https://arxiv.org/abs/1505.04597)
-- Learning techniques
+- Techniques
   - Transfer learning
+  - Visual explanations
+      - [Grad-CAM](https://arxiv.org/pdf/1610.02391)
 
 ## Code
 
