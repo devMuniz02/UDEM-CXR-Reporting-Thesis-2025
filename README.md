@@ -46,6 +46,7 @@ Once the container is running, open your browser and go to http://localhost:8000
   - Transfer learning
   - Visual explanations
       - [Grad-CAM](https://arxiv.org/pdf/1610.02391)
+      - [Grad-CAM++](https://arxiv.org/pdf/1710.11063)
 
 ## Code
 
