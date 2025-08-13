@@ -32,7 +32,7 @@ docker compose up
 ### 4. Access the App
 Once the container is running, open your browser and go to http://localhost:8000
 
-## [Research info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki/Research-Chest-X%E2%80%90ray-datasets,-papers,-and-related-projects)
+## [Research info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki)
 
 ## References of theory
 - Attention for Transformers
