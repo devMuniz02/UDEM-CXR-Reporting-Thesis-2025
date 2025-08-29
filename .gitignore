@@ -1,0 +1,36 @@
+# Ignore training output folders
+train1/
+train/
+
+# Ignore Python cache
+__pycache__/
+utils/__pycache__/
+
+# Ignore model weights and checkpoints
+*.pth
+*.pt
+
+# Ignore TensorBoard logs
+runs/
+train1/runs/
+train/runs/
+
+# Ignore JSON epoch files
+last_epoch.json
+
+# Ignore environment and dependency files
+.env
+*.env
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore Docker artifacts
+*.log
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore VS Code settings
+.vscode/
