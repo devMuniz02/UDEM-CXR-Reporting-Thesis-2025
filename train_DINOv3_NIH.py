@@ -27,7 +27,7 @@ CONFIG = {
     "batch_per_epoch_val": 10,        # how many batches to process per epoch (None to use full epoch)
     "batch_per_epoch_test": 10,       # how many batches to process per epoch (None to use full epoch)
     "image_size": 516,
-    "epochs_per_run": 50,            # how many epochs to train each execution
+    "epochs_per_run": 10,            # how many epochs to train each execution
     "lr": 1e-3,
     "cap_pos_weight": 500.0,         # cap for positive class weights (None to disable)
     "device": "cuda"                 # "cuda" or "cpu"

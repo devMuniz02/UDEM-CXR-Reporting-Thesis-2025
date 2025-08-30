@@ -20,3 +20,34 @@ docs for more detail on building and pushing.
 
 ### References
 * [Docker's Python guide](https://docs.docker.com/language/python/)
+
+# 🐳 How to Run with Docker Locally
+
+This guide walks you through running the Chest X-ray Report Generator using Docker.
+
+---
+
+## 🚀 Run with Docker
+
+Follow these steps to build and run the application using Docker:
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/pef-thesis.git
+cd pef-thesis
+```
+### 2. Build the Docker Image
+```bash
+docker compose build
+```
+### 3. Run the Container
+```bash
+docker compose up
+```
+-  #### 🛑 To stop it later:
+    ```bash
+    docker compose down
+    ```
+### 4. Access the App
+Once the container is running, open your browser and go to http://localhost:8000
