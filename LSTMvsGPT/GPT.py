@@ -516,95 +516,97 @@ def evaluate(model, loader, device, pad_id, num_batches):
     return {"val_loss": total_loss / steps, "val_ppl": total_pp / steps}
 
 # ========== Main ==========
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
+# def main():
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     print("Using device:", device)
 
-    valid_df = build_valid_df(CSV_PATH, IMG_ROOT)
-    if valid_df.empty:
-        print("[WARN] No valid rows found; check paths and PNG conversion.")
-        return
+#     valid_df = build_valid_df(CSV_PATH, IMG_ROOT)
+#     if valid_df.empty:
+#         print("[WARN] No valid rows found; check paths and PNG conversion.")
+#         return
 
-    labels_as_str = valid_df[TEXT_COL].astype(str).tolist()
-    tokenizer = build_tokenizer_from_labels(labels_as_str)
-    pad_id = getattr(tokenizer, "pad_token_id", 0)
-    bos_id = getattr(tokenizer, "bos_token_id", 1)
-    eos_id = getattr(tokenizer, "eos_token_id", 2)
+#     labels_as_str = valid_df[TEXT_COL].astype(str).tolist()
+#     tokenizer = build_tokenizer_from_labels(labels_as_str)
+#     pad_id = getattr(tokenizer, "pad_token_id", 0)
+#     bos_id = getattr(tokenizer, "bos_token_id", 1)
+#     eos_id = getattr(tokenizer, "eos_token_id", 2)
 
-    # DINO expects 224 or 518 square; 224 is fine here
-    tf = dino_image_transform(img_size=224)
-    ds = CheXpertDataset(img_root=IMG_ROOT, csv=valid_df, transform=tf, text_col=TEXT_COL)
-    collate_fn = CaptionCollate(tokenizer, pad_id)
+#     # DINO expects 224 or 518 square; 224 is fine here
+#     IMG_SIZE = 1024
+#     tf = dino_image_transform(img_size=IMG_SIZE)
+#     ds = CheXpertDataset(img_root=IMG_ROOT, csv=valid_df, transform=tf, text_col=TEXT_COL)
+#     collate_fn = CaptionCollate(tokenizer, pad_id)
 
-    is_windows = os.name == "nt"
-    num_workers = 0 if is_windows else 2
-    persistent_workers = False if num_workers == 0 else True
+#     is_windows = os.name == "nt"
+#     num_workers = 0 if is_windows else 2
+#     persistent_workers = False if num_workers == 0 else True
 
-    # Full loader (used to sample subsets below)
-    full_loader = DataLoader(
-        ds,
-        batch_size=8,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-        persistent_workers=persistent_workers,
-        collate_fn=collate_fn
-    )
+#     # Full loader (used to sample subsets below)
+#     full_loader = DataLoader(
+#         ds,
+#         batch_size=8,
+#         shuffle=True,
+#         num_workers=num_workers,
+#         pin_memory=True,
+#         persistent_workers=persistent_workers,
+#         collate_fn=collate_fn
+#     )
 
-    # Simple split
-    n_total = len(ds)
-    n_train = int(n_total * 0.8)
-    indices = torch.randperm(n_total).tolist()
-    train_idx, valid_idx = indices[:n_train], indices[n_train:]
-    train_ds = torch.utils.data.Subset(ds, train_idx)
-    valid_ds = torch.utils.data.Subset(ds, valid_idx)
-    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, collate_fn=collate_fn, num_workers=num_workers)
-    valid_loader = DataLoader(valid_ds, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=num_workers)
+#     # Simple split
+#     n_total = len(ds)
+#     n_train = int(n_total * 0.8)
+#     indices = torch.randperm(n_total).tolist()
+#     train_idx, valid_idx = indices[:n_train], indices[n_train:]
+#     train_ds = torch.utils.data.Subset(ds, train_idx)
+#     valid_ds = torch.utils.data.Subset(ds, valid_idx)
+#     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, collate_fn=collate_fn, num_workers=num_workers)
+#     valid_loader = DataLoader(valid_ds, batch_size=32, shuffle=False, collate_fn=collate_fn, num_workers=num_workers)
 
-    # DINO ViT-S/16 hidden size is 384 (for this checkpoint); adjust if you change encoder
-    D_IMG = 384
-    model = DinoGPTCaptioner(
-        vocab_size=tokenizer.vocab_size,
-        d_img=D_IMG,
-        pad_id=pad_id,
-        d_model=512,
-        n_layer=8,
-        n_head=8,
-        n_prefix=8,           # number of visual prefix tokens
-        max_seq_len=256,
-        dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        freeze_dino=True,
-    ).to(device)
+#     # DINO ViT-S/16 hidden size is 384 (for this checkpoint); adjust if you change encoder
+#     D_IMG = 384
+#     N_PREFIX = 1 #(IMG_SIZE // 16) ** 2  # number of visual prefix tokens (including CLS)
+#     model = DinoGPTCaptioner(
+#         vocab_size=tokenizer.vocab_size,
+#         d_img=D_IMG,
+#         pad_id=pad_id,
+#         d_model=512,
+#         n_layer=8,
+#         n_head=8,
+#         n_prefix=N_PREFIX,           # number of visual prefix tokens
+#         max_seq_len=256,
+#         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+#         freeze_dino=True,
+#     ).to(device)
 
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
-    )
+#     optimizer = torch.optim.AdamW(
+#         filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
+#     )
 
-    # ---- Train a few slices just to validate wiring ----
-    for epoch in range(1):
-        slice_train_loader = islice(train_loader, 20)
-        slice_valid_loader = islice(valid_loader, 20)
-        train_stats = train_one_epoch(model, slice_train_loader, optimizer, device, pad_id, num_batches=20, grad_clip=1.0)
-        val_stats = evaluate(model, slice_valid_loader, device, pad_id, num_batches=20)
-        print(f"Epoch {epoch + 1}: Train Loss={train_stats['loss']:.4f}, PPL={train_stats['ppl']:.2f} | "
-              f"Val Loss={val_stats['val_loss']:.4f}, Val PPL={val_stats['val_ppl']:.2f}")
+#     # ---- Train a few slices just to validate wiring ----
+#     for epoch in range(20):
+#         slice_train_loader = islice(train_loader, 20)
+#         slice_valid_loader = islice(valid_loader, 20)
+#         train_stats = train_one_epoch(model, slice_train_loader, optimizer, device, pad_id, num_batches=20, grad_clip=1.0)
+#         val_stats = evaluate(model, slice_valid_loader, device, pad_id, num_batches=20)
+#         print(f"Epoch {epoch + 1}: Train Loss={train_stats['loss']:.4f}, PPL={train_stats['ppl']:.2f} | "
+#               f"Val Loss={val_stats['val_loss']:.4f}, Val PPL={val_stats['val_ppl']:.2f}")
 
-    # ---- Quick generation sanity check ----
-    with torch.no_grad():
-        for pixel_values, ids_loader, paths, raw_labels in valid_loader:
-            pixel_values = pixel_values.to(device)
-            gen_ids = model.generate(
-                pixel_values=pixel_values,
-                bos_id=bos_id, eos_id=eos_id,
-                max_new_tokens=256, top_p=0.9, temperature=0.9, greedy=True
-            )
-            print("Predictions (first batch):")
-            for i in range(min(gen_ids.size(0), 3)):
-                print(f"\nGEN {i+1}:", tokenizer.decode(gen_ids[i].tolist()))
-                print(f"TGT {i+1}:", tokenizer.decode(ids_loader[i].tolist()))
-            del pixel_values, ids_loader, paths, raw_labels, gen_ids
-            torch.cuda.empty_cache()
-            break
+#     # ---- Quick generation sanity check ----
+#     with torch.no_grad():
+#         for pixel_values, ids_loader, paths, raw_labels in valid_loader:
+#             pixel_values = pixel_values.to(device)
+#             gen_ids = model.generate(
+#                 pixel_values=pixel_values,
+#                 bos_id=bos_id, eos_id=eos_id,
+#                 max_new_tokens=256, top_p=0.9, temperature=0.9, greedy=True
+#             )
+#             print("Predictions (first batch):")
+#             for i in range(min(gen_ids.size(0), 8)):
+#                 print(f"\nGEN {i+1}:", tokenizer.decode(gen_ids[i].tolist()))
+#                 print(f"TGT {i+1}:", tokenizer.decode(ids_loader[i].tolist()))
+#             del pixel_values, ids_loader, paths, raw_labels, gen_ids
+#             torch.cuda.empty_cache()
+#             break
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

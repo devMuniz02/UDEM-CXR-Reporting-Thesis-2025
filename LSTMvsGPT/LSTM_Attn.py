@@ -303,8 +303,6 @@ def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, grad_
         total_loss += loss.item()
         total_pp += ppl
         steps += 1
-        # Print shapes of pixel values and tgt ids
-        print(f"Train batch {steps}: pixel_values {pixel_values.shape}, tgt_ids {tgt_ids.shape}")
         # Free batch memory
         del pixel_values, tgt_ids, logits, loss, ppl
         torch.cuda.empty_cache()
@@ -324,8 +322,6 @@ def evaluate(model, loader, device, pad_id, num_batches):
         total_loss += loss.item()
         total_pp += ppl
         steps += 1
-        # Print shapes of pixel values and tgt ids
-        print(f"Eval batch {steps}: pixel_values {pixel_values.shape}, tgt_ids {tgt_ids.shape}")
         # Free batch memory
         del pixel_values, tgt_ids, logits, loss, ppl
         torch.cuda.empty_cache()
@@ -333,74 +329,74 @@ def evaluate(model, loader, device, pad_id, num_batches):
     return {"val_loss": total_loss / steps, "val_ppl": total_pp / steps}
 
 # ========== Main ==========
-def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("Using device:", device)
-    valid_df = build_valid_df(CSV_PATH, IMG_ROOT)
-    if valid_df.empty:
-        print("[WARN] No valid rows found; check paths and PNG conversion.")
-        return
-    labels_as_str = valid_df[TEXT_COL].astype(str).tolist()
-    tokenizer = build_tokenizer_from_labels(labels_as_str)
-    pad_id = getattr(tokenizer, "pad_token_id", 0)
-    bos_id = getattr(tokenizer, "bos_token_id", 1)
-    eos_id = getattr(tokenizer, "eos_token_id", 2)
-    tf = dino_image_transform(img_size=1024)
-    ds = CheXpertDataset(img_root=IMG_ROOT, csv=valid_df, transform=tf, text_col=TEXT_COL)
-    collate_fn = CaptionCollate(tokenizer, pad_id)
-    is_windows = os.name == "nt"
-    num_workers = 0 if is_windows else 2
-    persistent_workers = False if num_workers == 0 else True
-    loader = DataLoader(
-        ds,
-        batch_size=8,
-        shuffle=True,
-        num_workers=num_workers,
-        pin_memory=True,
-        persistent_workers=persistent_workers,
-        collate_fn=collate_fn
-    )
-    train_ds = torch.utils.data.Subset(ds, range(0, int(len(ds)*.8)))
-    valid_ds = torch.utils.data.Subset(ds, range(int(len(ds)*.8), len(ds)))
-    train_loader = DataLoader(train_ds, batch_size=8, shuffle=True, collate_fn=collate_fn)
-    valid_loader = DataLoader(valid_ds, batch_size=8, shuffle=False, collate_fn=collate_fn)
-    D_IMG = 384
-    model = DinoLSTMAttnCaptioner(
-        vocab_size=tokenizer.vocab_size,
-        d_img=D_IMG,
-        d_h=512,
-        pad_id=pad_id,
-        dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        freeze_dino=True,
-    ).to(device)
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
-    )
-    for epoch in range(20):
-        slice_train_loader = islice(train_loader, 10)
-        slice_valid_loader = islice(valid_loader, 10)
-        train_stats = train_one_epoch(model, slice_train_loader, optimizer, device, pad_id, num_batches=10, grad_clip=1.0)
-        val_stats = evaluate(model, slice_valid_loader, device, pad_id, num_batches=10)
-        print(f"Epoch {epoch + 1}: Train Loss={train_stats['loss']:.4f}, PPL={train_stats['ppl']:.2f} | "
-              f"Val Loss={val_stats['val_loss']:.4f}, Val PPL={val_stats['val_ppl']:.2f}")
-    test_loader_sliced = iter(valid_loader)
-    with torch.no_grad():
-        for batch in test_loader_sliced:
-            pixel_values, ids_loader, paths, raw_labels = batch
-            pixel_values = pixel_values.to(device)
-            gen_ids = model.generate(
-                pixel_values=pixel_values,
-                bos_id=bos_id, eos_id=eos_id,
-                max_new_tokens=50, top_p=0.9, temperature=0.9, greedy=True
-            )
-            print("Predictions test:")
-            for i in range(gen_ids.size(0)):
-                print(f"\nTEST GEN {i+1}:", tokenizer.decode(gen_ids[i].tolist()))
-                print(f"TEST TARGET {i+1}:", tokenizer.decode(ids_loader[i].tolist()))
-            # Free batch memory
-            del pixel_values, ids_loader, paths, raw_labels, gen_ids
-            torch.cuda.empty_cache()
-            break
+# def main():
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     print("Using device:", device)
+#     valid_df = build_valid_df(CSV_PATH, IMG_ROOT)
+#     if valid_df.empty:
+#         print("[WARN] No valid rows found; check paths and PNG conversion.")
+#         return
+#     labels_as_str = valid_df[TEXT_COL].astype(str).tolist()
+#     tokenizer = build_tokenizer_from_labels(labels_as_str)
+#     pad_id = getattr(tokenizer, "pad_token_id", 0)
+#     bos_id = getattr(tokenizer, "bos_token_id", 1)
+#     eos_id = getattr(tokenizer, "eos_token_id", 2)
+#     tf = dino_image_transform(img_size=1024)
+#     ds = CheXpertDataset(img_root=IMG_ROOT, csv=valid_df, transform=tf, text_col=TEXT_COL)
+#     collate_fn = CaptionCollate(tokenizer, pad_id)
+#     is_windows = os.name == "nt"
+#     num_workers = 0 if is_windows else 2
+#     persistent_workers = False if num_workers == 0 else True
+#     loader = DataLoader(
+#         ds,
+#         batch_size=8,
+#         shuffle=True,
+#         num_workers=num_workers,
+#         pin_memory=True,
+#         persistent_workers=persistent_workers,
+#         collate_fn=collate_fn
+#     )
+#     train_ds = torch.utils.data.Subset(ds, range(0, int(len(ds)*.8)))
+#     valid_ds = torch.utils.data.Subset(ds, range(int(len(ds)*.8), len(ds)))
+#     train_loader = DataLoader(train_ds, batch_size=8, shuffle=True, collate_fn=collate_fn)
+#     valid_loader = DataLoader(valid_ds, batch_size=8, shuffle=False, collate_fn=collate_fn)
+#     D_IMG = 384
+#     model = DinoLSTMAttnCaptioner(
+#         vocab_size=tokenizer.vocab_size,
+#         d_img=D_IMG,
+#         d_h=512,
+#         pad_id=pad_id,
+#         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+#         freeze_dino=True,
+#     ).to(device)
+#     optimizer = torch.optim.AdamW(
+#         filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
+#     )
+#     for epoch in range(20):
+#         slice_train_loader = islice(train_loader, 10)
+#         slice_valid_loader = islice(valid_loader, 10)
+#         train_stats = train_one_epoch(model, slice_train_loader, optimizer, device, pad_id, num_batches=10, grad_clip=1.0)
+#         val_stats = evaluate(model, slice_valid_loader, device, pad_id, num_batches=10)
+#         print(f"Epoch {epoch + 1}: Train Loss={train_stats['loss']:.4f}, PPL={train_stats['ppl']:.2f} | "
+#               f"Val Loss={val_stats['val_loss']:.4f}, Val PPL={val_stats['val_ppl']:.2f}")
+#     test_loader_sliced = iter(valid_loader)
+#     with torch.no_grad():
+#         for batch in test_loader_sliced:
+#             pixel_values, ids_loader, paths, raw_labels = batch
+#             pixel_values = pixel_values.to(device)
+#             gen_ids = model.generate(
+#                 pixel_values=pixel_values,
+#                 bos_id=bos_id, eos_id=eos_id,
+#                 max_new_tokens=50, top_p=0.9, temperature=0.9, greedy=True
+#             )
+#             print("Predictions test:")
+#             for i in range(gen_ids.size(0)):
+#                 print(f"\nTEST GEN {i+1}:", tokenizer.decode(gen_ids[i].tolist()))
+#                 print(f"TEST TARGET {i+1}:", tokenizer.decode(ids_loader[i].tolist()))
+#             # Free batch memory
+#             del pixel_values, ids_loader, paths, raw_labels, gen_ids
+#             torch.cuda.empty_cache()
+#             break
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

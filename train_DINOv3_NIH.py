@@ -21,14 +21,14 @@ from utils.torch_train import train_model, eval_model
 CONFIG = {
     "data_dir": r"C:\Users\emman\Desktop\PROYECTOS_VS_CODE\PRUEBAS_DE_PYTHON\CNN_PEF",                 # root containing images and CSV
     "csv_file": "data_clean.csv",
-    "model_id": "facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",#"facebook/dinov3-vitl16-pretrain-lvd1689m",
     "batch_size": 64,
     "batch_per_epoch_train": 20,      # how many batches to process per epoch (None to use full epoch)
     "batch_per_epoch_val": 10,        # how many batches to process per epoch (None to use full epoch)
     "batch_per_epoch_test": 10,       # how many batches to process per epoch (None to use full epoch)
-    "image_size": 516,
+    "image_size": 1024,
     "epochs_per_run": 10,            # how many epochs to train each execution
-    "lr": 1e-3,
+    "lr": 5e-5,
     "cap_pos_weight": 500.0,         # cap for positive class weights (None to disable)
     "device": "cuda"                 # "cuda" or "cpu"
 }
@@ -36,7 +36,7 @@ CONFIG = {
 # -----------------------------
 # Fixed output/ckpt locations
 # -----------------------------
-OUTPUT_DIR = "train/NIH/DINOv3_516px"
+OUTPUT_DIR = "train/NIH/DINOv3_1024px"
 MODELS_DIR = os.path.join(OUTPUT_DIR, "models")
 RUNS_DIR = os.path.join(OUTPUT_DIR, "runs")
 LATEST_CKPT = os.path.join(MODELS_DIR, "latest.pt")
