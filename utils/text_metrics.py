@@ -116,6 +116,7 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
         scorer = F1CheXbert()  # requires chexbert.pth in its cache path
         accuracy, accuracy_not_averaged, class_report, class_report_5 = scorer(hyps=gen, refs=ref)
 
+        weighted_f1 = float(class_report.get("weighted avg", {}).get("f1-score", 0.0))
         micro_f1   = float(class_report.get("micro avg", {}).get("f1-score", 0.0))
         macro_f1   = float(class_report.get("macro avg", {}).get("f1-score", 0.0))
         micro_f1_5 = float(class_report_5.get("micro avg", {}).get("f1-score", 0.0))
@@ -123,7 +124,7 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
         per_label  = [float(class_report.get(lbl, {}).get("f1-score", 0.0)) for lbl in _CHEXPERT_14]
 
         return {
-            "chexbert_f1": float(accuracy),
+            "chexbert_f1_weighted": weighted_f1,
             "chexbert_f1_micro": micro_f1,
             "chexbert_f1_macro": macro_f1,
             "chexbert_f1_micro_5": micro_f1_5,
@@ -144,7 +145,7 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
 
     # Safe empty return on failure
     return {
-        "chexbert_f1": None,
+        "chexbert_f1_weighted": None,
         "chexbert_f1_micro": None,
         "chexbert_f1_macro": None,
         "chexbert_f1_micro_5": None,
@@ -159,41 +160,19 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
 # =========================
 import contextlib
 import io
+from radgraph import F1RadGraph
 
-def radgraph_metric(generated: TextLike, original: TextLike, which: str = "RG_ER") -> List[float]:
-    """
-    Per-pair RadGraph F1 using the official scorer.
-    which ∈ {'RG_E','RG_ER','RG_bar_ER'}; default 'RG_ER'.
-    Robust to versions that append a trailing batch-mean entry.
-    Suppresses device/model_type messages from RadGraph.
-    """
-    gen, ref = _as_lists(generated, original)
+def radgraph_metric(generated: TextLike, original: TextLike) -> List[float]:
+    f1radgraph = F1RadGraph(reward_level="all", model_type="radgraph-xl")
+    hyps = generated
+    refs = original
+    mean_reward, reward_list, hypothesis_annotation_lists, reference_annotation_lists = f1radgraph(hyps=hyps, refs=refs)
 
-    # Honor lightweight mode if set
-    if os.environ.get("RADGRAPH_DISABLE_SCI", "").lower() in {"1", "true", "yes"}:
-        os.environ["DISABLE_RADGRAPH_SCISPACY"] = "1"
+    rg_e, rg_er, rg_bar_er = mean_reward
 
-    try:
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            from radgraph import F1RadGraph
-            idx = {"RG_E": 0, "RG_ER": 1, "RG_bar_ER": 2}[which]
-            f1rg = F1RadGraph(reward_level="all")
-            mean_reward, reward_list, *_ = f1rg(hyps=gen, refs=ref)
+    return float(rg_e), float(rg_er), float(rg_bar_er)
 
-        # Normalize to a flat list of floats
-        scores = []
-        for t in reward_list:
-            if isinstance(t, (list, tuple)):
-                scores.append(float(t[idx]))
-            else:
-                scores.append(float(t))
-        if len(scores) > len(gen):
-            scores = scores[:len(gen)]
-        return scores
 
-    except Exception as e:
-        print("[RadGraph] NOT usable:", repr(e))
-        return []
 # =========================
 # Master wrapper
 # =========================
@@ -204,22 +183,22 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
     bs = bertscore_metric(gen, ref)
 
     # Always compute RadGraph variants like before
-    rg_e  = radgraph_metric(gen, ref, which="RG_E")
-    rg_er = radgraph_metric(gen, ref, which="RG_ER")
+    rg_e, rg_er, _ = radgraph_metric(gen, ref)
 
     if evaluation_mode == "CheXagent":
         return {
             # CheXbert-focused (as in your figure/papers)
-            "chexbert_f1": cx["chexbert_f1"],
+            "chexbert_f1_weighted": cx["chexbert_f1_weighted"],
             "chexbert_f1_micro": cx["chexbert_f1_micro"],
             "chexbert_f1_macro": cx["chexbert_f1_macro"],
             "chexbert_f1_micro_5": cx["chexbert_f1_micro_5"],
             "chexbert_f1_macro_5": cx["chexbert_f1_macro_5"],
             "bertscore_f1": bs["f1"],
-            "rouge_l": rouge_l_score(gen, ref),
             # RadGraph F1 (like you had before)
             "radgraph_f1_RG_E": rg_e,
             "radgraph_f1_RG_ER": rg_er,
+            "rouge_l": rouge_l_score(gen, ref),
+            
         }
 
     return {
@@ -232,8 +211,12 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
         # bertscore (PubMedBERT by default)
         "bertscore_f1": bs["f1"],
 
+        # RadGraph F1
+        "radgraph_f1_RG_E": rg_e,
+        "radgraph_f1_RG_ER": rg_er,
+
         # chexbert variants
-        "chexbert_f1": cx["chexbert_f1"],                        # mean per-pair micro-F1
+        "chexbert_f1_weighted": cx["chexbert_f1_weighted"],                        # mean per-pair micro-F1
         "chexbert_f1_micro": cx["chexbert_f1_micro"],            # dataset micro-F1
         "chexbert_f1_macro": cx["chexbert_f1_macro"],            # dataset macro-F1
         "chexbert_f1_micro_5": cx["chexbert_f1_micro_5"],        # dataset micro-F1 (top-5)
@@ -242,9 +225,7 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
         "chexbert_per_label_f1": cx["chexbert_per_label_f1"],
         "chexbert_labels": cx["chexbert_labels"],
 
-        # RadGraph F1 (like before)
-        "radgraph_f1_RG_E": rg_e,
-        "radgraph_f1_RG_ER": rg_er,
+        
     }
 
 # =========================
