@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 import torchvision.transforms as T
 from transformers import GPT2Tokenizer
+from torch.nn import functional as F
 
 def dino_image_transform(img_size=224):
     return T.Compose([
@@ -113,14 +114,14 @@ class CaptionCollate:
 
 def sequence_ce_loss(logits, labels, pad_id):
     B, T, V = logits.size()
-    loss_fn = nn.CrossEntropyLoss(ignore_index=pad_id, label_smoothing=0.1)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=pad_id, label_smoothing=0.2)
     return loss_fn(logits.reshape(B * T, V), labels.reshape(B * T))
 
 @torch.no_grad()
-def batch_perplexity(logits, labels, pad_id, loss_fn=sequence_ce_loss):
-    loss = loss_fn(logits, labels, pad_id)
+def batch_perplexity(logits, labels, pad_id):
     import math
-    return float(math.exp(min(loss.item(), 20.0)))
+    return math.exp(sequence_ce_loss(logits, labels, pad_id).item())
+
 
 def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, loss_fn=sequence_ce_loss, grad_clip=1.0):
     model.train()
@@ -132,8 +133,9 @@ def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, loss_
         input_ids = tgt_ids[:, :-1]
         labels = tgt_ids[:, 1:]
         optimizer.zero_grad(set_to_none=True)
-        logits = model(pixel_values, input_ids)
-        loss = loss_fn(logits, labels, pad_id)
+        with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+            logits = model(pixel_values, input_ids)
+            loss = loss_fn(logits, labels, pad_id)
         loss.backward()
         if grad_clip is not None:
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)

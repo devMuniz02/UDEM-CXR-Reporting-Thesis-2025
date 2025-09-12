@@ -5,6 +5,29 @@ from PIL import Image, ImageFile
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+import re
+import string
+
+def clean_text(text: str) -> str:
+    # lowercase
+    text = text.lower()
+
+    # remove enumerators like "1." or "23." but KEEP decimals like "2.5"
+    # (?<!\d) ensures no digit right before; (?!\d) ensures no digit right after the dot
+    text = re.sub(r'(?<!\d)\b\d+\.(?!\d)', ' ', text)
+
+    # remove all punctuation EXCEPT "."
+    punctuation = string.punctuation.replace('.', '')
+    text = text.translate(str.maketrans('', '', punctuation))
+
+    # normalize spaces around periods to " . " → ". "
+    text = re.sub(r'\s*\.\s*', '. ', text)
+
+    # collapse multiple spaces and trim
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
 class CheXpertDataset(Dataset):
     def __init__(self, img_root, csv_path, split="train", transform=None, text_col="section_impression", path_col="path_to_image", enforce_exists=True):
         df = pd.read_csv(csv_path)
@@ -53,4 +76,5 @@ class CheXpertDataset(Dataset):
             image = self.transform(im) if self.transform else im
         findings = row[self.text_col]
         findings = "" if pd.isna(findings) else str(findings)
+        findings = clean_text(findings)
         return {"image": image, "label": findings, "path": full_path}

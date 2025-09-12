@@ -5,6 +5,29 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from PIL import Image
 
+import re
+import string
+
+def clean_text(text: str) -> str:
+    # lowercase
+    text = text.lower()
+
+    # remove enumerators like "1." or "23." but KEEP decimals like "2.5"
+    # (?<!\d) ensures no digit right before; (?!\d) ensures no digit right after the dot
+    text = re.sub(r'(?<!\d)\b\d+\.(?!\d)', ' ', text)
+
+    # remove all punctuation EXCEPT "."
+    punctuation = string.punctuation.replace('.', '')
+    text = text.translate(str.maketrans('', '', punctuation))
+
+    # normalize spaces around periods to " . " → ". "
+    text = re.sub(r'\s*\.\s*', '. ', text)
+
+    # collapse multiple spaces and trim
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    return text
+
 class PadChestGRDataset(Dataset):
     """
     Minimal, fast dataset for PadChest-GR report generation.
@@ -57,5 +80,6 @@ class PadChestGRDataset(Dataset):
         with Image.open(self.img_paths[idx]).convert("RGB") as im:
             image = self.transform(im)
         findings = self.texts[idx]
+        findings = clean_text(findings)
         full_path = self.img_paths[idx]
         return {"image": image, "label": findings, "path": full_path}
