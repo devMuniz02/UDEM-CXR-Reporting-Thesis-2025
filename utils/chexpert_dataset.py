@@ -71,7 +71,7 @@ class CheXpertDataset(Dataset):
             if os.path.exists(p):
                 keep_idx.append(i)
         csv = df.iloc[keep_idx].reset_index(drop=True)
-        print(f"[INFO] Kept {len(csv)}/{len(df)} rows with existing PNGs under {img_root}")
+        print(f"[INFO] Kept {len(csv)}/{len(df)} rows with existing PNGs")
 
         self.img_root = os.path.abspath(img_root)
         if split in {"train", "valid", "test"}:

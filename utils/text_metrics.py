@@ -9,8 +9,6 @@ Includes BLEU, ROUGE, METEOR, cosine similarity, BERTScore, CheXbert, and RadGra
 from __future__ import annotations
 import os
 import pathlib
-import contextlib
-import io
 
 # Typing imports
 from typing import Union, List, Tuple, Dict, Any
