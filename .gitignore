@@ -2,6 +2,13 @@
 train1/
 train/
 
+# Ignore dataset folders
+Datasets/
+datasets/
+
+# Ignore environment folders
+venv/
+
 # Ignore Python cache
 __pycache__/
 utils/__pycache__/
