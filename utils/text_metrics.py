@@ -1,59 +1,108 @@
+
+"""
+Text metrics utilities for chest X-ray report evaluation.
+Includes BLEU, ROUGE, METEOR, cosine similarity, BERTScore, CheXbert, and RadGraph metrics.
+"""
+
+
+# Standard library imports
 from __future__ import annotations
-from typing import Union, List, Tuple, Dict, Any
 import os
 import pathlib
-import numpy as np
+import contextlib
+import io
 
-# =========================
-# Classic/NLP metrics
-# =========================
+# Typing imports
+from typing import Union, List, Tuple, Dict, Any
+
+# Third-party imports
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+from nltk.translate.meteor_score import meteor_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from rouge_score import rouge_scorer
-from nltk.translate.meteor_score import meteor_score
+from torch import cuda
 
 # Optional: BERTScore (domain-aware)
 try:
     from bert_score import score as bertscore_score
-except Exception:
+except ImportError:
     bertscore_score = None
+
+# RadGraph imports
+from radgraph import F1RadGraph
+
+# CheXbert imports
+from f1chexbert import F1CheXbert
 
 TextLike = Union[str, List[str]]
 
-# -------------------------
-# Utilities
-# -------------------------
 def _as_lists(generated: TextLike, original: TextLike) -> Tuple[List[str], List[str]]:
-    """Coerce inputs to aligned lists of the same length (min of the two)."""
-    if isinstance(generated, str): generated = [generated]
-    if isinstance(original, str):  original  = [original]
+    """
+    Coerce inputs to aligned lists of the same length (min of the two).
+    Args:
+        generated (TextLike): Generated text(s).
+        original (TextLike): Reference text(s).
+    Returns:
+        Tuple[List[str], List[str]]: Aligned lists of generated and reference texts.
+    """
+    if isinstance(generated, str):
+        generated = [generated]
+    if isinstance(original, str):
+        original = [original]
     n = min(len(generated), len(original))
     return generated[:n], original[:n]
 
 def _has_cuda() -> bool:
+    """
+    Check if CUDA is available for torch.
+    Returns:
+        bool: True if CUDA is available, False otherwise.
+    """
     try:
-        import torch
-        return torch.cuda.is_available()
-    except Exception:
+        return cuda.is_available()
+    except ImportError:
         return False
 
 # =========================
 # Classic text metrics
 # =========================
 def bleu_score(generated: TextLike, original: TextLike) -> List[float]:
+    """
+    Compute BLEU score for each generated/reference pair.
+    Args:
+        generated (TextLike): Generated text(s).
+        original (TextLike): Reference text(s).
+    Returns:
+        List[float]: BLEU scores per pair.
+    """
     gen, ref = _as_lists(generated, original)
     smoothie = SmoothingFunction().method1
     return [float(sentence_bleu([r.split()], g.split(), smoothing_function=smoothie))
             for g, r in zip(gen, ref)]
 
 def rouge_l_score(generated: TextLike, original: TextLike) -> List[float]:
-    """ROUGE-L (F1) per pair."""
+    """
+    Compute ROUGE-L (F1) score for each generated/reference pair.
+    Args:
+        generated (TextLike): Generated text(s).
+        original (TextLike): Reference text(s).
+    Returns:
+        List[float]: ROUGE-L F1 scores per pair.
+    """
     gen, ref = _as_lists(generated, original)
     scorer = rouge_scorer.RougeScorer(['rougeL'], use_stemmer=True)
     return [float(scorer.score(r, g)['rougeL'].fmeasure) for g, r in zip(gen, ref)]
 
 def cosine_sim_score(generated: TextLike, original: TextLike) -> List[float]:
+    """
+    Compute cosine similarity score for each generated/reference pair using TF-IDF vectors.
+    Args:
+        generated (TextLike): Generated text(s).
+        original (TextLike): Reference text(s).
+    Returns:
+        List[float]: Cosine similarity scores per pair.
+    """
     gen, ref = _as_lists(generated, original)
     vec = TfidfVectorizer().fit(gen + ref)
     out = []
@@ -63,6 +112,14 @@ def cosine_sim_score(generated: TextLike, original: TextLike) -> List[float]:
     return out
 
 def meteor_score_batch(generated: TextLike, original: TextLike) -> List[float]:
+    """
+    Compute METEOR score for each generated/reference pair.
+    Args:
+        generated (TextLike): Generated text(s).
+        original (TextLike): Reference text(s).
+    Returns:
+        List[float]: METEOR scores per pair.
+    """
     gen, ref = _as_lists(generated, original)
     return [float(meteor_score([r.split()], g.split())) for g, r in zip(gen, ref)]
 
@@ -81,7 +138,7 @@ def bertscore_metric(generated: TextLike, original: TextLike,
     dev = device or ('cuda' if _has_cuda() else 'cpu')
     try:
         P, R, F1 = bertscore_score(gen, ref, model_type=model, device=dev, verbose=False)
-    except Exception:
+    except KeyError:
         P, R, F1 = bertscore_score(gen, ref, model_type="bert-base-uncased", device=dev, verbose=False)
     return {
         "p":  P.cpu().numpy().tolist(),
@@ -102,19 +159,25 @@ _CHEXPERT_14 = [
 
 def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
     """
+    Compute CheXbert metrics for generated/reference report pairs.
     Wraps F1CheXbert to expose:
-      - chexbert_f1: mean per-pair micro-F1 (F1CheXbert 'accuracy')
-      - chexbert_f1_micro: dataset-level micro-F1 from classification report
-      - chexbert_f1_macro: dataset-level macro-F1 over 14 labels
-      - chexbert_f1_micro_5 / chexbert_f1_macro_5: top-5 subset if provided by the lib
-      - chexbert_per_pair_micro: list of per-pair micro-F1
-      - chexbert_per_label_f1: length-14 vector (order = _CHEXPERT_14)
+        - chexbert_f1_weighted: mean per-pair weighted F1
+        - chexbert_f1_micro: dataset-level micro-F1
+        - chexbert_f1_macro: dataset-level macro-F1
+        - chexbert_f1_micro_5 / chexbert_f1_macro_5: top-5 subset if provided
+        - chexbert_per_pair_micro: list of per-pair micro-F1
+        - chexbert_per_label_f1: length-14 vector (order = _CHEXPERT_14)
+    Args:
+            generated (TextLike): Generated report(s).
+            original (TextLike): Reference report(s).
+    Returns:
+            Dict[str, Any]: CheXbert metrics and per-label F1 scores.
     """
     gen, ref = _as_lists(generated, original)
     try:
-        from f1chexbert import F1CheXbert
         scorer = F1CheXbert()  # requires chexbert.pth in its cache path
-        accuracy, accuracy_not_averaged, class_report, class_report_5 = scorer(hyps=gen, refs=ref)
+        # accuracy, accuracy_not_averaged, class_report, class_report_5
+        _, accuracy_not_averaged, class_report, class_report_5 = scorer(hyps=gen, refs=ref)
 
         weighted_f1 = float(class_report.get("weighted avg", {}).get("f1-score", 0.0))
         micro_f1   = float(class_report.get("micro avg", {}).get("f1-score", 0.0))
@@ -140,8 +203,10 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
         )
         print("[CheXbert] Weights missing at:", missing_path)
         print("→ Place 'chexbert.pth' there and re-run.")
-    except Exception as e:
-        print("[CheXbert] unavailable:", repr(e))
+    except ImportError as e:
+        print("[CheXbert] unavailable (import error):", repr(e))
+    except AttributeError as e:
+        print("[CheXbert] unavailable (attribute error):", repr(e))
 
     # Safe empty return on failure
     return {
@@ -156,27 +221,44 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
     }
 
 # =========================
-# RadGraph (entity/relations F1 via F1RadGraph)
+# RadGraph (entity/relation F1)
 # =========================
-import contextlib
-import io
-from radgraph import F1RadGraph
 
 def radgraph_metric(generated: TextLike, original: TextLike) -> List[float]:
+    """
+    Compute RadGraph entity/relation F1 metrics for generated/reference report pairs.
+    Args:
+        generated (TextLike): Generated report(s).
+        original (TextLike): Reference report(s).
+    Returns:
+        List[float]: Tuple of (entity F1, entity+relation F1, bar entity+relation F1).
+    """
     f1radgraph = F1RadGraph(reward_level="all", model_type="radgraph-xl")
     hyps = generated
     refs = original
-    mean_reward, reward_list, hypothesis_annotation_lists, reference_annotation_lists = f1radgraph(hyps=hyps, refs=refs)
+    # mean_reward, reward_list, hypothesis_annotation_lists, reference_annotation_lists
+    mean_reward, *_ = f1radgraph(hyps=hyps, refs=refs)
 
     rg_e, rg_er, rg_bar_er = mean_reward
 
     return float(rg_e), float(rg_er), float(rg_bar_er)
 
+# =========================
+# All metrics evaluation
+# =========================
 
-# =========================
-# Master wrapper
-# =========================
-def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mode: str = "default") -> Dict[str, Any]:
+def evaluate_all_metrics(generated: TextLike,
+                         original: TextLike,
+                         evaluation_mode: str = "CheXagent") -> Dict[str, Any]:
+    """
+    Evaluate all text metrics for generated/reference report pairs.
+    Args:
+        generated (TextLike): Generated report(s).
+        original (TextLike): Reference report(s).
+        evaluation_mode (str): Evaluation mode ('default' or 'CheXagent').
+    Returns:
+        Dict[str, Any]: Dictionary of all computed metrics.
+    """
     gen, ref = _as_lists(generated, original)
 
     cx = chexbert_metrics(gen, ref)
@@ -197,8 +279,7 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
             # RadGraph F1 (like you had before)
             "radgraph_f1_RG_E": rg_e,
             "radgraph_f1_RG_ER": rg_er,
-            "rouge_l": rouge_l_score(gen, ref),
-            
+            "rouge_l": rouge_l_score(gen, ref), 
         }
 
     return {
@@ -207,16 +288,13 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
         "rouge_l": rouge_l_score(gen, ref),          # ROUGE-L (F1)
         "cosine_similarity": cosine_sim_score(gen, ref),
         "meteor": meteor_score_batch(gen, ref),
-
         # bertscore (PubMedBERT by default)
         "bertscore_f1": bs["f1"],
-
         # RadGraph F1
         "radgraph_f1_RG_E": rg_e,
         "radgraph_f1_RG_ER": rg_er,
-
         # chexbert variants
-        "chexbert_f1_weighted": cx["chexbert_f1_weighted"],                        # mean per-pair micro-F1
+        "chexbert_f1_weighted": cx["chexbert_f1_weighted"],      # mean per-pair micro-F1
         "chexbert_f1_micro": cx["chexbert_f1_micro"],            # dataset micro-F1
         "chexbert_f1_macro": cx["chexbert_f1_macro"],            # dataset macro-F1
         "chexbert_f1_micro_5": cx["chexbert_f1_micro_5"],        # dataset micro-F1 (top-5)
@@ -224,14 +302,15 @@ def evaluate_all_metrics(generated: TextLike, original: TextLike, evaluation_mod
         "chexbert_per_pair_micro": cx["chexbert_per_pair_micro"],
         "chexbert_per_label_f1": cx["chexbert_per_label_f1"],
         "chexbert_labels": cx["chexbert_labels"],
-
-        
     }
 
 # =========================
 # Example usage
 # =========================
 def main():
+    """
+    Example usage for evaluating metrics on sample reports.
+    """
     generated_reports = [
         "The lungs are clear. No pleural effusion.",
         "There is mild cardiomegaly."
@@ -241,7 +320,7 @@ def main():
         "Mild enlargement of the heart is noted."
     ]
 
-    all_metrics = evaluate_all_metrics(generated_reports, original_reports)  # or evaluation_mode="CheXagent"
+    all_metrics = evaluate_all_metrics(generated_reports, original_reports)
     for metric, scores in all_metrics.items():
         print(f"{metric}: {scores}")
 

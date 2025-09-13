@@ -1,8 +1,23 @@
+
+"""
+Plotting utilities for chest X-ray classification metrics and results.
+"""
+
+# Third-party imports
 import matplotlib.pyplot as plt
 
-def plot_roc_curve(fpr, tpr, roc_auc, class_name='Class name', save_path=None):
+def plot_roc_curve(fpr, tpr, roc_auc: float, class_name='Class name', save_path=None):
+    """
+    Plot a ROC curve for a binary classifier.
+    Args:
+        fpr (array-like): False positive rates.
+        tpr (array-like): True positive rates.
+        roc_auc (float): Area under the ROC curve.
+        class_name (str): Title for the plot.
+        save_path (str, optional): If provided, save plot to this path. Otherwise, show plot.
+    """
     plt.figure()
-    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
     plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
@@ -14,4 +29,3 @@ def plot_roc_curve(fpr, tpr, roc_auc, class_name='Class name', save_path=None):
         plt.savefig(save_path)
     else:
         plt.show()
-    return

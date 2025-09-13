@@ -1,12 +1,16 @@
+""" Train a DINOv3-based chest X-ray classifier on NIH dataset. """
+
 import os
 import json
 import gc
 import copy
 import datetime
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn
+from torch import optim
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from utils.data import (
     load_data, split_data, get_label_columns, build_transforms,
@@ -19,13 +23,13 @@ from utils.torch_train import train_model, eval_model
 # Static config (no argparse)
 # -----------------------------
 CONFIG = {
-    "data_dir": r"C:\Users\emman\Desktop\PROYECTOS_VS_CODE\PRUEBAS_DE_PYTHON\CNN_PEF",                 # root containing images and CSV
+    "data_dir": "Datasets/NIH",      # path containing images and CSV
     "csv_file": "data_clean.csv",
-    "model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",#"facebook/dinov3-vitl16-pretrain-lvd1689m",
+    "model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
     "batch_size": 64,
-    "batch_per_epoch_train": 20,      # how many batches to process per epoch (None to use full epoch)
-    "batch_per_epoch_val": 10,        # how many batches to process per epoch (None to use full epoch)
-    "batch_per_epoch_test": 10,       # how many batches to process per epoch (None to use full epoch)
+    "batch_per_epoch_train": 20,
+    "batch_per_epoch_val": 10,
+    "batch_per_epoch_test": 10,
     "image_size": 1024,
     "epochs_per_run": 10,            # how many epochs to train each execution
     "lr": 5e-5,
@@ -47,17 +51,24 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 os.makedirs(RUNS_DIR, exist_ok=True)
 
 def save_epoch(epoch, path):
-    with open(path, "w") as f:
+    """ Save last completed epoch to JSON file.
+    """
+    with open(path, "w", encoding="utf-8") as f:
         json.dump({"last_epoch": int(epoch)}, f)
 
 def load_epoch(path):
+    """ Load last completed epoch from JSON file.
+        Returns 0 if file does not exist or is invalid.
+    """
     if os.path.exists(path):
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             d = json.load(f)
             return int(d.get("last_epoch", 0))
     return 0
 
 def free_gpu_resources(model):
+    """ Free GPU memory from a model and related resources.
+    """
     del model
     gc.collect()
     if torch.cuda.is_available():
@@ -65,12 +76,26 @@ def free_gpu_resources(model):
         torch.cuda.ipc_collect()
 
 def _to_serializable_labels(labels):
+    """ Convert label columns to a JSON-serializable list of strings.
+        Handles pd.Index, np.ndarray, tuples, etc.
+    """
     try:
         return list(map(str, list(labels)))  # handles pd.Index, np arrays, etc.
-    except Exception:
+    except (TypeError, AttributeError):
         return [str(x) for x in labels]
 
 def save_checkpoint(path, epoch, model, optimizer, scheduler, run_name, label_cols, best_metric=None):
+    """ Save model checkpoint to path.
+        Args:
+            path (str): Path to save the checkpoint.
+            epoch (int): Current epoch number.
+            model (nn.Module): Model to save.
+            optimizer (torch.optim.Optimizer): Optimizer state to save.
+            scheduler (torch.optim.lr_scheduler._LRScheduler or None): Scheduler state to save.
+            run_name (str): Name of the training run.
+            label_cols (list or pd.Index): List of label column names.
+            best_metric (float or None): Best validation metric achieved so far (optional).
+    """
     ckpt = {
         "epoch": int(epoch),
         "model_state": model.state_dict(),
@@ -87,12 +112,23 @@ def save_checkpoint(path, epoch, model, optimizer, scheduler, run_name, label_co
 
 
 def load_checkpoint_if_any(path, device, model, optimizer=None, scheduler=None):
+    """ Load model checkpoint from path if it exists.
+        Args:
+            path (str): Path to the checkpoint file.
+            device (torch.device): Device to map the checkpoint tensors to.
+            model (nn.Module): Model to load the state into.
+            optimizer (torch.optim.Optimizer or None): Optimizer to load the state into (optional).
+            scheduler (torch.optim.lr_scheduler._LRScheduler or None): Scheduler to load 
+            the state into (optional).
+        Returns:
+            dict or None: The loaded checkpoint dictionary, or None if no checkpoint was found.
+    """
     if not os.path.exists(path):
         return None
     print(f"[resume] Loading checkpoint from {path}")
     try:
         ckpt = torch.load(path, map_location=device)  # PyTorch 2.6 default: weights_only=True
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         print(f"[resume] Safe load failed ({e}). Retrying with weights_only=False")
         ckpt = torch.load(path, map_location=device, weights_only=False)
 
@@ -104,6 +140,7 @@ def load_checkpoint_if_any(path, device, model, optimizer=None, scheduler=None):
     return ckpt
 
 def main():
+    """ Main training function."""
     device = torch.device(CONFIG["device"] if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -122,9 +159,22 @@ def main():
     test_dataset  = ChestXrayDataset(test_df,  transform=test_tf,   label_cols=label_cols)
 
     num_workers = 0 if os.name == "nt" else 4
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=CONFIG["batch_size"], shuffle=True,  num_workers=num_workers)
-    val_loader   = torch.utils.data.DataLoader(val_dataset,   batch_size=CONFIG["batch_size"], shuffle=True, num_workers=num_workers)
-    test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=CONFIG["batch_size"], shuffle=False, num_workers=num_workers)
+    train_loader = DataLoader(train_dataset,
+                              batch_size=CONFIG["batch_size"],
+                              shuffle=True,
+                              num_workers=num_workers)
+    val_loader   = DataLoader(val_dataset,
+                              batch_size=CONFIG["batch_size"],
+                              shuffle=True,
+                              num_workers=num_workers)
+    val_loader   = DataLoader(val_dataset,
+                              batch_size=CONFIG["batch_size"],
+                              shuffle=True,
+                              num_workers=num_workers)
+    test_loader  = DataLoader(test_dataset,
+                              batch_size=CONFIG["batch_size"],
+                              shuffle=False,
+                              num_workers=num_workers)
 
     # Model (fresh init)
     base_model = load_base_model(CONFIG["model_id"], device=device)
@@ -141,7 +191,7 @@ def main():
     # Loss & optim
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG["lr"])
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
     def _to_list_str(x):
         if x is None:
@@ -165,9 +215,12 @@ def main():
         list_labels = _to_list_str(label_cols)
         if ckpt_labels and ckpt_labels != list_labels:
             print("[warn] Label columns differ from checkpoint; continuing anyway.")
-        if maybe_ckpt.get("config_model_id") and maybe_ckpt["config_model_id"] != CONFIG["model_id"]:
-            print(f"[warn] model_id differs (ckpt={maybe_ckpt['config_model_id']} vs current={CONFIG['model_id']}).")
-
+        config_model_id = maybe_ckpt.get("config_model_id")
+        current_model_id = CONFIG["model_id"]
+        if config_model_id and config_model_id != current_model_id:
+            print(
+                f"[warn] model_id differs (ckpt={config_model_id} vs current={current_model_id})."
+            )
         print(f"[resume] Continuing from epoch {start_epoch}")
 
     # TensorBoard
@@ -179,10 +232,11 @@ def main():
 
     # -------- Train --------
     epochs_to_train = CONFIG["epochs_per_run"]
-    history = train_model(
+    train_model(
         model, device, train_loader, val_loader, criterion, optimizer,
         class_names=label_cols, epochs=epochs_to_train, verbose=2, scheduler=scheduler,
-        save_dir=MODELS_DIR, batch_per_epoch_train=CONFIG["batch_per_epoch_train"], batch_per_epoch_val=CONFIG["batch_per_epoch_val"], writer=writer, start_epoch=start_epoch,
+        save_dir=MODELS_DIR, batch_per_epoch_train=CONFIG["batch_per_epoch_train"], 
+        batch_per_epoch_val=CONFIG["batch_per_epoch_val"], writer=writer, start_epoch=start_epoch,
     )
 
     # Save checkpoint (latest)
@@ -198,7 +252,9 @@ def main():
     free_gpu_resources(model_before)
 
     print("Evaluating on test set:")
-    eval_model(model, test_loader, device, criterion, label_cols, batch_per_epoch=CONFIG["batch_per_epoch_test"], writer=writer, current_epoch=end_epoch)
+    eval_model(model, test_loader, device, criterion, label_cols, 
+               batch_per_epoch=CONFIG["batch_per_epoch_test"], writer=writer, 
+               current_epoch=end_epoch)
 
     writer.close()
 

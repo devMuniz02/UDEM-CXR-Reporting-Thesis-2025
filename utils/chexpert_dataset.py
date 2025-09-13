@@ -1,14 +1,33 @@
+
+"""PyTorch Dataset for CheXpert chest X-ray images and associated reports."""
+
+# Standard library imports
 import os
-import pandas as pd
-from torch.utils.data import Dataset
-from PIL import Image, ImageFile
-
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-
 import re
 import string
 
+# Third-party imports
+import pandas as pd
+from PIL import Image, ImageFile
+from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
+
+# Configure PIL
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
 def clean_text(text: str) -> str:
+    """
+    Clean and normalize radiology report text for NLP tasks.
+    - Lowercases text
+    - Removes enumerators like "1." but keeps decimals
+    - Removes punctuation except periods
+    - Normalizes spaces around periods
+    - Collapses multiple spaces
+    Args:
+        text (str): Input text string.
+    Returns:
+        str: Cleaned text string.
+    """
     # lowercase
     text = text.lower()
 
@@ -29,7 +48,22 @@ def clean_text(text: str) -> str:
     return text
 
 class CheXpertDataset(Dataset):
+    """
+    PyTorch Dataset for CheXpert chest X-ray images and associated reports.
+    Loads images and cleans associated text findings for use in deep learning models.
+    """
     def __init__(self, img_root, csv_path, split="train", transform=None, text_col="section_impression", path_col="path_to_image", enforce_exists=True):
+        """
+        Initialize CheXpertDataset.
+        Args:
+            img_root (str): Root directory containing images.
+            csv_path (str): Path to CSV file with metadata.
+            split (str): Data split ('train', 'valid', 'test').
+            transform (callable, optional): Image transform.
+            text_col (str): Column name for findings text.
+            path_col (str): Column name for image path.
+            enforce_exists (bool): If True, only keep rows with existing images.
+        """
         df = pd.read_csv(csv_path)
         keep_idx = []
         for i, rel in enumerate(df[path_col].tolist()):
@@ -43,7 +77,6 @@ class CheXpertDataset(Dataset):
         if split in {"train", "valid", "test"}:
             csv = csv[csv["split"] == "train"]
             patients = csv["deid_patient_id"].unique().tolist()
-            from sklearn.model_selection import train_test_split
             train_ids, temp_ids = train_test_split(patients, test_size=0.1, random_state=42)
             valid_ids, test_ids = train_test_split(temp_ids, test_size=0.5, random_state=42)
             if split == "train":
@@ -59,13 +92,33 @@ class CheXpertDataset(Dataset):
         self.path_col = path_col
 
     def __len__(self):
+        """
+        Return the number of samples in the dataset.
+        Returns:
+            int: Number of samples.
+        """
         return len(self.df)
 
     def _full_png_path(self, rel):
+        """
+        Get the absolute path to a PNG image given a relative path.
+        Args:
+            rel (str): Relative image path from CSV.
+        Returns:
+            str: Absolute path to PNG image.
+        """
         p = rel.replace("\\", "/")
         return os.path.join(self.img_root, p).replace(".jpg", ".png")
 
     def __getitem__(self, idx):
+        """
+        Get a sample from the dataset by index.
+        Loads and transforms the image, cleans the findings text.
+        Args:
+            idx (int): Index of the sample.
+        Returns:
+            dict: Dictionary with keys 'image', 'label', and 'path'.
+        """
         row = self.df.iloc[idx]
         rel = row[self.path_col]
         full_path = self._full_png_path(rel)

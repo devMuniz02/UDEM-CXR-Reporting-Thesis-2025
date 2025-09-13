@@ -1,31 +1,40 @@
+
+"""
+PadChestGRDataset: PyTorch Dataset for PadChest-GR chest X-ray images and associated reports.
+Includes text cleaning and image preprocessing utilities.
+"""
+
+# Standard library imports
 import os
 import json
+import re
+import string
+
+# Third-party imports
 from typing import List, Dict, Any
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from PIL import Image
 
-import re
-import string
-
 def clean_text(text: str) -> str:
-    # lowercase
+    """
+    Clean and normalize radiology report text for NLP tasks.
+    - Lowercases text
+    - Removes enumerators like "1." but keeps decimals
+    - Removes punctuation except periods
+    - Normalizes spaces around periods
+    - Collapses multiple spaces
+    Args:
+        text (str): Input text string.
+    Returns:
+        str: Cleaned text string.
+    """
     text = text.lower()
-
-    # remove enumerators like "1." or "23." but KEEP decimals like "2.5"
-    # (?<!\d) ensures no digit right before; (?!\d) ensures no digit right after the dot
     text = re.sub(r'(?<!\d)\b\d+\.(?!\d)', ' ', text)
-
-    # remove all punctuation EXCEPT "."
     punctuation = string.punctuation.replace('.', '')
     text = text.translate(str.maketrans('', '', punctuation))
-
-    # normalize spaces around periods to " . " → ". "
     text = re.sub(r'\s*\.\s*', '. ', text)
-
-    # collapse multiple spaces and trim
     text = re.sub(r'\s+', ' ', text).strip()
-
     return text
 
 class PadChestGRDataset(Dataset):
@@ -40,13 +49,24 @@ class PadChestGRDataset(Dataset):
         dataframe,
         root_dir: str,
         json_file: str,
-        max_txt_len: int = 64,
         image_size: int = 1024,
         normalize: bool = True,
         transform=None,
         return_paths: bool = False,
         sentence_key: str = "sentence_en",
     ):
+        """
+        Initialize PadChestGRDataset.
+        Args:
+            dataframe (pd.DataFrame): DataFrame with image IDs.
+            root_dir (str): Root directory containing images.
+            json_file (str): Path to JSON file with findings.
+            image_size (int): Size to resize images to.
+            normalize (bool): Whether to normalize images.
+            transform (callable, optional): Image transform.
+            return_paths (bool): If True, include image paths in output.
+            sentence_key (str): Key for findings sentences in JSON.
+        """
         self.root_dir = root_dir
         self.img_ids: List[str] = dataframe["ImageID"].tolist()
         self.img_paths: List[str] = [os.path.join(root_dir, x) for x in self.img_ids]
@@ -74,9 +94,22 @@ class PadChestGRDataset(Dataset):
         self.texts = texts
 
     def __len__(self) -> int:
+        """
+        Return the number of samples in the dataset.
+        Returns:
+            int: Number of samples.
+        """
         return len(self.img_paths)
 
     def __getitem__(self, idx: int):
+        """
+        Get a sample from the dataset by index.
+        Loads and transforms the image, cleans the findings text.
+        Args:
+            idx (int): Index of the sample.
+        Returns:
+            dict: Dictionary with keys 'image', 'label', and 'path'.
+        """
         with Image.open(self.img_paths[idx]).convert("RGB") as im:
             image = self.transform(im)
         findings = self.texts[idx]
