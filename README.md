@@ -4,7 +4,7 @@
 
 ![Project Options](assets/ProjectOptions.png)
 
-## Opction chosen
+## Option chosen
 
 ![Option B](assets/OptionB.png)
 
@@ -23,12 +23,6 @@
   - Visual explanations
       - [Grad-CAM](https://arxiv.org/pdf/1610.02391)
       - [Grad-CAM++](https://arxiv.org/pdf/1710.11063)
-
-## Code
-
-- Kaggle code example [LINK TO EXAMPLE KAGGLE NOTEBOOK](https://www.kaggle.com/code/kmader/train-simple-xray-cnn)
-- My Kaggle code [LINK TO KAGGLE NOTEBOOK](https://www.kaggle.com/code/devmuiz/chest/edit)
-- My Colab code [https://colab.research.google.com/drive/1umNFkP6SWtUC7W4cUycM4Cd3pHYMwLcw?usp=sharing]
 
 ## Things to watch when trainning NN
 - Class imbalances
