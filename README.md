@@ -14,6 +14,8 @@
 - Attention for Transformers
     - [First attention paper](https://arxiv.org/abs/1409.0473)
     - [First transformer paper](https://arxiv.org/abs/1706.03762)
+    - [First GPT model OpenAi](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
+    - [GPT-2 model OpenAi](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
 - Model architectures
   - Convolutional Neural Networks
     - [ResNet](https://arxiv.org/abs/1512.03385)
