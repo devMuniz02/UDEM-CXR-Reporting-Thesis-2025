@@ -16,6 +16,9 @@
     - [First transformer paper](https://arxiv.org/abs/1706.03762)
     - [First GPT model OpenAi](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
     - [GPT-2 model OpenAi](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
+      - [GPT-2 Model architecture](https://medium.com/%40hsinhungw/gpt-2-detailed-model-architecture-6b1aad33d16b)
+      
+        ![GPT-2 Model architecture](assets/GPT2ModelArchitecture.png)
 - Model architectures
   - Convolutional Neural Networks
     - [ResNet](https://arxiv.org/abs/1512.03385)
