@@ -1,12 +1,12 @@
 # Chest X-ray Diagnosis and Automated Radiology Report Generation - UDEM PEF-Thesis (Fall-2025)
 
-## Project options
+## [Project options](https://drive.google.com/file/d/1RG4J-OJZHEcZ6JLumfA0csCI9Gp2dGzf/view?usp=sharing)
 
 ![Project Options](assets/ProjectOptions.png)
 
-## Option chosen
+## [Option chosen](https://drive.google.com/file/d/1awiWTWzrvHGp5Se7_MCwdPbxYbsJklMg/view?usp=sharing)
 
-![Option B](assets/OptionB.png)
+![Option B](assets/OptionChosen.png)
 
 ## [Research info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki)
 
