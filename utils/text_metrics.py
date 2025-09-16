@@ -273,11 +273,11 @@ def evaluate_all_metrics(generated: TextLike,
             "chexbert_f1_macro": cx["chexbert_f1_macro"],
             "chexbert_f1_micro_5": cx["chexbert_f1_micro_5"],
             "chexbert_f1_macro_5": cx["chexbert_f1_macro_5"],
-            "bertscore_f1": bs["f1"],
+            # "bertscore_f1": bs["f1"],
             # RadGraph F1 (like you had before)
             "radgraph_f1_RG_E": rg_e,
             "radgraph_f1_RG_ER": rg_er,
-            "rouge_l": rouge_l_score(gen, ref), 
+            # "rouge_l": rouge_l_score(gen, ref), 
         }
 
     return {
@@ -302,6 +302,17 @@ def evaluate_all_metrics(generated: TextLike,
         "chexbert_labels": cx["chexbert_labels"],
     }
 
+def save_metrics_to_json(metrics: Dict[str, Any], filepath: str) -> None:
+    """
+    Save metrics dictionary to a JSON file.
+    Args:
+        metrics (Dict[str, Any]): Metrics dictionary.
+        filepath (str): Path to save the JSON file.
+    """
+    import json
+    with open(filepath, 'w') as f:
+        json.dump(metrics, f, indent=4)
+
 # =========================
 # Example usage
 # =========================
@@ -321,6 +332,8 @@ def main():
     all_metrics = evaluate_all_metrics(generated_reports, original_reports)
     for metric, scores in all_metrics.items():
         print(f"{metric}: {scores}")
+
+    save_metrics_to_json(all_metrics, "lstm-vs-gpt/all_metrics.json")
 
 if __name__ == "__main__":
     main()
