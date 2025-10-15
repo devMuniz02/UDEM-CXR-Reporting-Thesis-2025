@@ -4,9 +4,11 @@
 
 ![Project Options](assets/ProjectOptions.png)
 
-## [Option chosen](https://drive.google.com/file/d/1awiWTWzrvHGp5Se7_MCwdPbxYbsJklMg/view?usp=sharing)
+## [Option chosen](https://drive.google.com/file/d/1Gd5-31rOAuWlL_81S1IRSGc9QBF8aOPb/view?usp=sharing)
 
 ![Option B](assets/OptionChosen.png)
+
+## [Simple workflow](https://drive.google.com/file/d/1NbkvJL-v_InbMioPg1pficEe3plhqRi1/view?usp=sharing)
 
 ## [Research info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki)
 
