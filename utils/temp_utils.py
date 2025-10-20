@@ -40,7 +40,7 @@ class SimpleWordTokenizer:
         specials = {self.pad_token_id, self.bos_token_id, self.eos_token_id}
         return " ".join(self.itos[i] if 0 <= i < len(self.itos) else "<unk>" for i in ids if i not in specials)
 
-def build_tokenizer_from_labels(captions=None, gpt2=False):
+def build_tokenizer_from_labels(captions=None, gpt2=True):
     try:
         from transformers import AutoTokenizer
         HF_AVAILABLE = True
@@ -49,6 +49,7 @@ def build_tokenizer_from_labels(captions=None, gpt2=False):
     if captions is None and HF_AVAILABLE:
         if gpt2:
             tok = GPT2Tokenizer.from_pretrained("gpt2")
+            print("Using GPT2 tokenizer.")
             class _Wrap:
                 def __init__(self, tok):
                     self.tok = tok
