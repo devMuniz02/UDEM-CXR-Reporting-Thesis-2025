@@ -4,7 +4,7 @@ import csv
 from PIL import Image
 import pytest
 
-from utils.chexpert_dataset import (
+from utils.data.chexpert_dataset import (
     clean_text,
     clean_text_for_training,
     CheXpertDataset,
