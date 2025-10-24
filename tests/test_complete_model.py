@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import GPT2Tokenizer
 
-from utils.complete_model import (
+from utils.models.complete_model import (
     DINOEncoder,
     DinoUNet,
     create_decoder,
@@ -13,7 +13,7 @@ from utils.complete_model import (
     save_complete_model,
 )
 
-from utils.modifiedGPT2 import GPT2LMHeadModelModified
+from utils.models.modifiedGPT2 import GPT2LMHeadModelModified
 
 def test_create_complete_model():
     model = create_complete_model(
