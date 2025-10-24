@@ -12,12 +12,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-from utils.data import (
+from utils.classification.data import (
     load_data, split_data, get_label_columns, build_transforms,
     compute_class_pos_weights, ChestXrayDataset
 )
-from utils.models import load_base_model, ChestXrayClassifier
-from utils.torch_train import train_model, eval_model
+from utils.classification.models import load_base_model, ChestXrayClassifier
+from utils.classification.torch_train import train_model, eval_model
 
 # -----------------------------
 # Static config (no argparse)
