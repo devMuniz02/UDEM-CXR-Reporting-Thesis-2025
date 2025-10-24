@@ -8,6 +8,7 @@ datasets/
 
 # Ignore environment folders
 venv/
+venv*/
 
 # Ignore Python cache
 __pycache__/
@@ -41,3 +42,6 @@ Thumbs.db
 
 # Ignore VS Code settings
 .vscode/
+
+temp*.ipynb
+temp*.py
