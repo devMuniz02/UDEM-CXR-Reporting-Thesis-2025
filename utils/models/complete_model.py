@@ -3,10 +3,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoModel, GPT2Tokenizer
 
-try:
-    from .modifiedGPT2 import create_decoder
-except ImportError:
-    from modifiedGPT2 import create_decoder
+from utils.models.modifiedGPT2 import create_decoder
+
+from utils.layer_mask import gaussian_layer_stack_pipeline
 
 
 class DINOEncoder(nn.Module):
@@ -28,8 +27,6 @@ class DINOEncoder(nn.Module):
         # Skip a few special tokens if your backbone adds them; adjust as needed.
         patches = tokens[:, 5:, :]  # [B, Np, Cenc]
         return patches
-
-convert_and_tile_mask = lambda mask, num_layers, device: mask.repeat(1, num_layers, 1, 1)
 
 class DinoUNet(nn.Module):
     def __init__(self, model_name="facebook/dinov3-convnext-small-pretrain-lvd1689m", freeze=True):
@@ -57,7 +54,7 @@ class DinoUNet(nn.Module):
         feats = next(h for h in reversed(enc_feats.hidden_states) if isinstance(h, torch.Tensor) and h.ndim == 4)
         feats = self.channel_adapter(feats)
         pred = self.decoder(feats)                    # (B,1,h,w)
-        segmentation_mask = convert_and_tile_mask(pred, num_layers, x.device)
+        _, _, segmentation_mask = gaussian_layer_stack_pipeline(pred, n_layers = num_layers)
         return segmentation_mask    # [B, num_layers, h, w]
 
 
