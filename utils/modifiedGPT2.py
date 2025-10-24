@@ -143,15 +143,35 @@ class GPT2AttentionModified(GPT2Attention):
                 else:
                     if getattr(self.config, "plot_attention_map_generation", 0) == S:
                         print(f"Plotting attention row map for token {S} generation on layer {self.layer_idx}")
-                        # single-row 1D heatmap
-                        row = attn_bh[0].detach().float().cpu().numpy()  # [S]
-                        plt.figure(figsize=(10,2.5))
-                        plt.imshow(row[None, :], aspect="auto", cmap="hot", vmin=0, vmax=0.01)
+                        # attn_bh expected shape: [..., S] for the selected (B0, H0) row
+                        row = attn_bh[0].detach().float().cpu().numpy()  # -> np.ndarray shape [S]
+                        n = row.shape[0]
+
+                        # ----- First 1024 as 32x32 -----
+                        head_1024 = row[:min(1024, n)]
+                        grid = head_1024.reshape(32, 32)
+
+                        plt.figure(figsize=(6, 5))
+                        plt.imshow(grid, aspect="auto", cmap="hot", vmin=0, vmax=0.01)
                         plt.yticks([])
                         plt.colorbar()
-                        plt.xlabel("Keys (S)")
-                        plt.title(f"Attention row (B0,H0)  L=1, S={S}")
+                        plt.xlabel("Keys (S) [indices 0..1023]")
+                        plt.title(f"Attention row (B0,H0)  L={self.layer_idx}, S={S} — first 1024")
+                        plt.tight_layout()
                         plt.show()
+
+                        # ----- Tail (>=1024) as a single-row heatmap -----
+                        tail = row[1024:]
+                        if tail.size > 0:
+                            plt.figure(figsize=(10, 1.2))
+                            # one-row heatmap
+                            plt.imshow(tail[None, :], aspect="auto", cmap="hot", vmin=0, vmax=0.01)
+                            plt.yticks([])
+                            plt.colorbar()
+                            plt.xlabel(f"Keys (S) [indices 1024..{n-1}]")
+                            plt.title(f"Attention row tail (B0,H0)  L={self.layer_idx}, S={S}")
+                            plt.tight_layout()
+                            plt.show()
 
         attn_output = attn_output.reshape(*attn_output.shape[:-2], -1).contiguous()
         attn_output = self.c_proj(attn_output)
