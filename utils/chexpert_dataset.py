@@ -19,33 +19,77 @@ def clean_text(text: str) -> str:
     """
     Clean and normalize radiology report text for NLP tasks.
     - Lowercases text
-    - Removes enumerators like "1." but keeps decimals
+    - Removes enumerators like "1." but keeps decimals like "2.5"
+    - Converts intra-word hyphens to spaces ("follow-up" -> "follow up")
     - Removes punctuation except periods
-    - Normalizes spaces around periods
-    - Collapses multiple spaces
-    Args:
-        text (str): Input text string.
-    Returns:
-        str: Cleaned text string.
+    - Normalizes spaces around non-decimal periods
+    - Collapses multiple spaces and repeated periods
     """
-    # lowercase
-    text = text.lower()
+    # Guard: accept None or non-string inputs
+    if not isinstance(text, str):
+        text = "" if text is None else str(text)
 
-    # remove enumerators like "1." or "23." but KEEP decimals like "2.5"
-    # (?<!\d) ensures no digit right before; (?!\d) ensures no digit right after the dot
-    text = re.sub(r'(?<!\d)\b\d+\.(?!\d)', ' ', text)
+    t = text.lower()
 
-    # remove all punctuation EXCEPT "."
+    # 1) Remove enumerators like "1." or "23." when NOT part of a decimal (no digit after the dot)
+    #    Does not affect "2.5", "1.23", etc.
+    t = re.sub(r'\b\d+\.(?!\d)', ' ', t)
+
+    # 2) Convert intra-word hyphens to spaces (so "follow-up" -> "follow up")
+    t = re.sub(r'(?<=\w)-(?=\w)', ' ', t)
+
+    # 3) Remove all punctuation EXCEPT periods
+    #    (string.punctuation includes '.', so remove it from the deletion list)
     punctuation = string.punctuation.replace('.', '')
-    text = text.translate(str.maketrans('', '', punctuation))
+    t = t.translate(str.maketrans('', '', punctuation))
 
-    # normalize spaces around periods to " . " → ". "
-    text = re.sub(r'\s*\.\s*', '. ', text)
+    # 4) Collapse repeated periods ("..." -> ".")
+    t = re.sub(r'\.{2,}', '.', t)
 
-    # collapse multiple spaces and trim
-    text = re.sub(r'\s+', ' ', text).strip()
+    # 5) Remove spaces before a period ("word ." -> "word.")
+    t = re.sub(r'\s+\.', '.', t)
 
-    return text
+    # 6) Ensure a space after non-decimal periods
+    #    Only if the period doesn't have a digit on either side, to avoid "2. 5"
+    t = re.sub(r'(?<!\d)\.(?!\d)', '. ', t)
+
+    # 7) Collapse multiple spaces and trim
+    t = re.sub(r'\s+', ' ', t).strip()
+
+    return t
+
+
+def clean_text_for_training(
+    text: str,
+    cutoff: str = "physician to physician",
+    cleaner=clean_text
+) -> str:
+    """
+    Prepare report text for training:
+
+    1) Cut everything after (and excluding) `cutoff` (case-insensitive).
+    2) Clean the remaining fragment using `cleaner` (defaults to `clean_text`).
+
+    Args:
+        text: Input text (can be None; will be cast to str).
+        cutoff: Delimiter phrase used to cut the text (case-insensitive).
+        cleaner: Cleaning function to apply (signature: (str) -> str). Defaults to `clean_text`.
+
+    Returns:
+        Cleaned text suitable for training.
+    """
+    if not isinstance(text, str):
+        text = "" if text is None else str(text)
+
+    # Case-insensitive split before `cutoff`
+    pattern = re.compile(re.escape(cutoff), flags=re.IGNORECASE)
+    parts = pattern.split(text, maxsplit=1)
+    before = parts[0].strip() if parts else text
+
+    # Reuse the main cleaner to keep a single source of truth
+    return cleaner(before)
+
+
 
 class CheXpertDataset(Dataset):
     """
@@ -75,7 +119,7 @@ class CheXpertDataset(Dataset):
 
         self.img_root = os.path.abspath(img_root)
         if split in {"train", "valid", "test"}:
-            csv = csv[csv["split"] == "train"]
+            csv = csv[csv["split"] == "train"] #### TEMPORARY HACK #### To be removed when using official splits
             patients = csv["deid_patient_id"].unique().tolist()
             train_ids, temp_ids = train_test_split(patients, test_size=0.1, random_state=42)
             valid_ids, test_ids = train_test_split(temp_ids, test_size=0.5, random_state=42)
@@ -90,6 +134,7 @@ class CheXpertDataset(Dataset):
         self.text_col = text_col
         self.enforce_exists = enforce_exists
         self.path_col = path_col
+        self.split = split
 
     def __len__(self):
         """
@@ -101,7 +146,7 @@ class CheXpertDataset(Dataset):
 
     def _full_png_path(self, rel):
         """
-        Get the absolute path to a PNG image given a relative path.
+        Get the absolute path to a PNG image given a relative .jpg path.
         Args:
             rel (str): Relative image path from CSV.
         Returns:
@@ -129,5 +174,5 @@ class CheXpertDataset(Dataset):
             image = self.transform(im) if self.transform else im
         findings = row[self.text_col]
         findings = "" if pd.isna(findings) else str(findings)
-        findings = clean_text(findings)
+        findings = clean_text(findings) if self.split == "test" else clean_text_for_training(findings)
         return {"image": image, "label": findings, "path": full_path}
