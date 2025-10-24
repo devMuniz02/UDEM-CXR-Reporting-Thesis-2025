@@ -316,24 +316,24 @@ def save_metrics_to_json(metrics: Dict[str, Any], filepath: str) -> None:
 # =========================
 # Example usage
 # =========================
-def main():
-    """
-    Example usage for evaluating metrics on sample reports.
-    """
-    generated_reports = [
-        "The lungs are clear. No pleural effusion.",
-        "There is mild cardiomegaly."
-    ]
-    original_reports  = [
-        "Lungs appear clear with no effusion.",
-        "Mild enlargement of the heart is noted."
-    ]
+# def main():
+#     """
+#     Example usage for evaluating metrics on sample reports.
+#     """
+#     generated_reports = [
+#         "The lungs are clear. No pleural effusion.",
+#         "There is mild cardiomegaly."
+#     ]
+#     original_reports  = [
+#         "Lungs appear clear with no effusion.",
+#         "Mild enlargement of the heart is noted."
+#     ]
 
-    all_metrics = evaluate_all_metrics(generated_reports, original_reports)
-    for metric, scores in all_metrics.items():
-        print(f"{metric}: {scores}")
+#     all_metrics = evaluate_all_metrics(generated_reports, original_reports)
+#     for metric, scores in all_metrics.items():
+#         print(f"{metric}: {scores}")
 
-    save_metrics_to_json(all_metrics, "lstm-vs-gpt/all_metrics.json")
+#     save_metrics_to_json(all_metrics, "lstm-vs-gpt/all_metrics.json")
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
