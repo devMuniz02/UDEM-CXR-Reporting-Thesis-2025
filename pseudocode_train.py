@@ -16,31 +16,43 @@ def train(train_loader, valid_loader, model, optimizer, device, epochs=10, check
                 print("Checkpointing model...")
                 save_checkpoint(model, optimizer, checkpoint_path)
 
-def loader(chexpert_data_path, chexpert_data_csv, mimic_data_path, mimic_data_path_csv):
+def create_loaders(chexpert_paths, mimic_paths):
     # Data loader placeholder
     print("Creating data loaders...")
     return None  # Replace with actual data loader
 
 if __name__ == "__main__":
+    # ALL PATHS
+    MODELS_DIR = "models/"
+    SEGMENTER_MODEL_PATH = f"{MODELS_DIR}dino_unet_decoder_finetuned.pth"
+    save_path = f"{MODELS_DIR}complete_model.pth"
+    checkpoint_path = f"{MODELS_DIR}model_checkpoint.pth"
+
+    CHEXPERT_DIR = "Datasets/CheXpertPlus/"
+    chexpert_paths = {
+        "chexpert_data_path": f"{CHEXPERT_DIR}/PNG",
+        "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401.csv"
+    }
+    
+    MIMIC_DIR = "Datasets/MIMIC/"
+    mimic_paths = {
+        "mimic_data_path": f"{MIMIC_DIR}",
+        "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
+        "mimic_metadata_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-metadata.csv",
+        "mimic_reports_path": f"{MIMIC_DIR}/cxr-record-list.csv.gz"
+    }
+
     # Example usage
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = create_complete_model(device=device)
-
-    # ALL PATHS
-    save_path = "complete_model.pth"
-    checkpoint_path = "model_checkpoint.pth"
-    chexpert_data_path = "/path/to/chexpert/data"
-    chexpert_data_csv = "/path/to/chexpert/metadata.csv"
-    mimic_data_path = "/path/to/mimic/data"
-    mimic_data_path_csv = "/path/to/mimic/metadata.csv"
+    model = create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH)
 
     # Load the model
     if pathlib.Path(save_path).exists():
         model = load_complete_model(model, save_path, device=device, strict=True)
 
     # Create data loaders, optimizers, etc. here
-    train_loader = loader(chexpert_data_path, chexpert_data_csv, mimic_data_path, mimic_data_path_csv)  # Placeholder
-    valid_loader = loader(chexpert_data_path, chexpert_data_csv, mimic_data_path, mimic_data_path_csv)  # Placeholder
+    train_loader = create_loaders(chexpert_paths, mimic_paths)  # Placeholder
+    valid_loader = create_loaders(chexpert_paths, mimic_paths)  # Placeholder
     optimizer = None  # Placeholder
 
     # Train the model
