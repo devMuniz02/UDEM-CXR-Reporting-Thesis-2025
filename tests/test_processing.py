@@ -1,11 +1,26 @@
+import io
 import os
+from pathlib import Path, PurePosixPath
 import numpy as np
+import pandas as pd
 import torch
 import pytest
 from PIL import Image
 import torchvision.transforms as T
+import sklearn.model_selection as ym
 
-from utils.processing import image_transform, reverse_image_transform
+from utils.processing import (
+    image_transform, 
+    reverse_image_transform,
+    is_gcs,
+    join_uri,
+    open_binary,
+    open_text,
+    read_csv_any,
+    pil_from_path,
+    loader,
+    fsspec
+)
 
 
 def _set_seeds(seed: int = 1234):
@@ -108,3 +123,208 @@ def test_identity_on_edge_values_with_clamp():
     out = reverse_image_transform(t)
     assert out.shape == (3, 2, 2)
     assert (out >= 0).all() and (out <= 1).all()
+
+# ---------------------------
+# Local-only mock for fsspec.open
+# ---------------------------
+class _MockFSOpen:
+    """
+    Mimics fsspec.open(...).open() -> fileobj, but *never* uses network.
+    If path is 'gs://bucket/...', it is mapped to <tmp>/bucket/... (PurePosix).
+    """
+    def __init__(self, tmp_root: Path, path: str, mode: str, encoding=None):
+        self.tmp_root = tmp_root
+        self.path = path
+        self.mode = mode
+        self.encoding = encoding
+
+    def open(self):
+        if str(self.path).startswith("gs://"):
+            rel = self.path.replace("gs://", "")
+            local_path = self.tmp_root / PurePosixPath(rel)
+        else:
+            local_path = Path(self.path)
+
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        if "b" in self.mode:
+            return open(local_path, self.mode)
+        else:
+            return open(local_path, self.mode, encoding=self.encoding)
+
+
+def test_is_gcs():
+    assert is_gcs("gs://bucket/file.txt") is True
+    assert is_gcs("gs://bucket") is True
+    assert is_gcs("/local/path") is False
+    assert is_gcs("C:\\windows\\path") is False
+
+
+def test_join_uri_local_and_gs(tmp_path: Path):
+    # local
+    base_local = str(tmp_path / "base")
+    res_local = join_uri(base_local, "a", "b", "c.txt")
+    assert Path(res_local) == Path(base_local) / "a" / "b" / "c.txt"
+
+    # gs
+    base_gs = "gs://mybucket/dir"
+    res_gs = join_uri(base_gs, "x", "y", "z.png")
+    assert res_gs == "gs://mybucket/dir/x/y/z.png"
+
+
+def test_open_text_and_binary_local(tmp_path: Path, monkeypatch):
+    # Prepare local files
+    txt_p = tmp_path / "note.txt"
+    bin_p = tmp_path / "raw.bin"
+    txt_p.write_text("hola mundo\n", encoding="utf-8")
+    bin_p.write_bytes(b"\x01\x02abc")
+
+    # Mock fsspec.open to ensure no external I/O
+
+    def _fake_open(path, mode="rb", encoding=None):
+        return _MockFSOpen(tmp_path, path, mode, encoding)
+
+    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+
+    with open_text(str(txt_p), encoding="utf-8") as f:
+        assert f.read() == "hola mundo\n"
+
+    with open_binary(str(bin_p)) as f:
+        assert f.read() == b"\x01\x02abc"
+
+
+def test_open_text_and_binary_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
+    # Create files where the mock will map gs:// paths
+    (tmp_path / "mybucket/dir").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "mybucket/dir/note.txt").write_text("cloud line", encoding="utf-8")
+    (tmp_path / "mybucket/dir/blob.bin").write_bytes(b"\x00\xff")
+
+    def _fake_open(path, mode="rb", encoding=None):
+        return _MockFSOpen(tmp_path, path, mode, encoding)
+
+    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+
+    with open_text("gs://mybucket/dir/note.txt") as f:
+        assert f.read() == "cloud line"
+    with open_binary("gs://mybucket/dir/blob.bin") as f:
+        assert f.read() == b"\x00\xff"
+
+
+def test_pil_from_path_local(tmp_path: Path, monkeypatch):
+    # Save a small image
+    local_img = tmp_path / "img.png"
+    Image.new("RGB", (16, 8), color=(10, 20, 30)).save(local_img)
+
+    # Route through mocked fsspec to avoid any accidental remote access
+
+    def _fake_open(path, mode="rb", encoding=None):
+        return _MockFSOpen(tmp_path, path, mode, encoding)
+
+    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+
+    img = pil_from_path(str(local_img))
+    assert img.mode == "RGB"
+    assert img.size == (16, 8)
+
+
+def test_pil_from_path_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
+    # Create a "bucket" image in tmp for the mock
+    mapped = tmp_path / "bucket/a/b.png"
+    mapped.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (7, 5), color=(1, 2, 3)).save(mapped)
+
+    def _fake_open(path, mode="rb", encoding=None):
+        return _MockFSOpen(tmp_path, path, mode, encoding)
+
+    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+
+    img = pil_from_path("gs://bucket/a/b.png")
+    assert img.mode == "RGB"
+    assert img.size == (7, 5)
+
+
+def test_read_csv_any_local(tmp_path: Path):
+    csvp = tmp_path / "small.csv"
+    df_in = pd.DataFrame({"x": [1, 2], "y": ["a", "b"]})
+    df_in.to_csv(csvp, index=False)
+
+    df = read_csv_any(str(csvp))
+    assert df.equals(df_in)
+
+
+def test_loader_basic_filters_and_splits(tmp_path: Path, monkeypatch):
+    """
+    Validates:
+      - split name mapping
+      - ViewPosition filtering (AP/PA only)
+      - CheXpert Frontal-only filtering
+      - Basic train/valid split behavior
+    Uses only local CSVs and a fake train_test_split; no network access.
+    """
+    # --- create tiny CSVs ---
+    mimic_splits = pd.DataFrame({
+        "dicom_id": ["d1", "d2", "d3", "d4"],
+        "split":     ["train", "validate", "test", "train"],
+    })
+    mimic_meta = pd.DataFrame({
+        "dicom_id": ["d1", "d2", "d3", "d4"],
+        "ViewPosition": ["AP", "LATERAL", "PA", "AP"],
+    })
+    mimic_reports = pd.DataFrame({
+        "dicom_id": ["d1", "d2", "d3", "d4"],
+        "path": ["p1/s1/d1.dcm", "p1/s2/d2.dcm", "p2/s1/d3.dcm", "p3/s3/d4.dcm"],
+    })
+    chexpert = pd.DataFrame({
+        "path_to_image": ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+        "frontal_lateral": ["Frontal", "Lateral", "Frontal", "Frontal"],
+        "split": ["train", "train", "valid", "test"],
+        "section_impression": ["t1", "t2", "t3", "t4"],
+    })
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "mimic_splits.csv").write_text(mimic_splits.to_csv(index=False))
+    (data_dir / "mimic_meta.csv").write_text(mimic_meta.to_csv(index=False))
+    (data_dir / "mimic_reports.csv").write_text(mimic_reports.to_csv(index=False))
+    (data_dir / "chexpert.csv").write_text(chexpert.to_csv(index=False))
+
+    chexpert_paths = {"chexpert_data_csv": str(data_dir / "chexpert.csv")}
+    mimic_paths = {
+        "mimic_splits_csv": str(data_dir / "mimic_splits.csv"),
+        "mimic_metadata_csv": str(data_dir / "mimic_meta.csv"),
+        "mimic_reports_path": str(data_dir / "mimic_reports.csv"),
+    }
+    def _fake_tts(df, test_size=0.01, random_state=None):
+        n = len(df)
+        cut = max(1, int(round(n * (1 - test_size))))
+        return df.iloc[:cut].copy(), df.iloc[cut:].copy()
+
+    _orig_tts = ym.train_test_split
+    monkeypatch.setattr(ym, "train_test_split", _fake_tts, raising=True)
+    monkeypatch.setattr(ym, "train_test_split", _fake_tts, raising=True)
+
+    # Case A: split='test' => chexpert_split='valid', no tts invoked for chexpert
+    MIMIC_df, CHEXPERT_df = loader(chexpert_paths, mimic_paths, split="test")
+    # MIMIC: AP/PA only & split=='test' -> only 'd3' (PA)
+    assert set(MIMIC_df["dicom_id"]) == {"d3"}
+    # CheXpert: Frontal & split=='valid' -> only 'c.jpg'
+    assert set(CHEXPERT_df["path_to_image"]) == {"c.jpg"}
+
+    # Case B: split='train' => chexpert_split='train' and tts is called
+    MIMIC_df2, CHEXPERT_df2 = loader(chexpert_paths, mimic_paths, split="train")
+    assert set(MIMIC_df2["dicom_id"]) == {"d1", "d4"}  # AP only & split train
+    assert set(CHEXPERT_df2["frontal_lateral"]) == {"Frontal"}
+    assert len(CHEXPERT_df2) >= 1  # non-empty after fake split
+
+    # Restore (optional; new pytest process each run anyway)
+    monkeypatch.setattr(ym, "train_test_split", _orig_tts, raising=True)
+
+
+def test_loader_invalid_split_raises(tmp_path: Path):
+    chexpert_paths = {"chexpert_data_csv": str(tmp_path / "c.csv")}
+    mimic_paths = {
+        "mimic_splits_csv": str(tmp_path / "a.csv"),
+        "mimic_metadata_csv": str(tmp_path / "b.csv"),
+        "mimic_reports_path": str(tmp_path / "d.csv"),
+    }
+    with pytest.raises(ValueError):
+        loader(chexpert_paths, mimic_paths, split="dev")
