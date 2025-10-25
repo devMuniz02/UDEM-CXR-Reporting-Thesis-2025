@@ -11,6 +11,8 @@ from utils.models.complete_model import (
     create_complete_model,
     load_complete_model,
     save_complete_model,
+    load_checkpoint,
+    save_checkpoint,
 )
 
 from utils.models.modifiedGPT2 import GPT2LMHeadModelModified
@@ -46,6 +48,43 @@ def test_save_and_load_complete_model(tmp_path):
     
     for param_original, param_loaded in zip(model.parameters(), loaded_model.parameters()):
         assert torch.equal(param_original, param_loaded), "Model parameters do not match after loading"
+
+def test_save_and_load_checkpoint(tmp_path):
+    # Create model and optimizer
+    model = create_complete_model(
+        device="cpu",
+        ENCODER_MODEL_PATH=None,
+        SEGMENTER_MODEL_PATH=None,
+        DECODER_MODEL_PATH=None,
+        LINEAR_PROJECTION_PATH=None,
+    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+    # Save original parameters for comparison
+    original_params = [param.clone().detach() for param in model.parameters()]
+    original_lrs = [group['lr'] for group in optimizer.param_groups]
+
+    # Save checkpoint
+    checkpoint_path = tmp_path / "model_checkpoint.pth"
+    save_checkpoint(model, optimizer, str(checkpoint_path))
+
+    # Modify model and optimizer state
+    for param in model.parameters():
+        param.data.add_(1.0)
+    for group in optimizer.param_groups:
+        group['lr'] = 0.01
+
+    # Load checkpoint
+    loaded_model, loaded_optimizer = load_checkpoint(model, optimizer, str(checkpoint_path))
+
+    # Validate model parameters were restored
+    for restored_param, original_param in zip(loaded_model.parameters(), original_params):
+        assert torch.allclose(restored_param.data, original_param.data, atol=1e-6), \
+            "Model parameters were not restored correctly from checkpoint"
+
+    # Validate optimizer state was restored
+    for group, original_lr in zip(loaded_optimizer.param_groups, original_lrs):
+        assert group['lr'] == original_lr, "Optimizer learning rate was not restored correctly from checkpoint"
 
 def test_model_forward_pass():
     model = create_complete_model(

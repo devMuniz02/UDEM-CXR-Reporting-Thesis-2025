@@ -171,7 +171,18 @@ def save_complete_model(model: CustomModel, save_path: str, device: str = "cuda"
     # Restore model device
     model.to(device if isinstance(device, str) else orig_device)
 
-def load_complete_model(model: CustomModel, load_path: str, device: str = "cuda", strict: bool = True) -> CustomModel:
+def save_checkpoint(model: CustomModel, optimizer: torch.optim.Optimizer, save_path: str) -> None:
+    # Ensure folder exists
+    os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+    }
+    torch.save(checkpoint, save_path)
+    print(f"Saved checkpoint to {save_path}")
+
+def load_complete_model(model: CustomModel, load_path: str, device: str = "cpu", strict: bool = True) -> CustomModel:
     if not os.path.exists(load_path):
         print(f"No weights found at {load_path}")
         model.to(device)
@@ -189,3 +200,18 @@ def load_complete_model(model: CustomModel, load_path: str, device: str = "cuda"
     model.to(device)
     print(f"Loaded complete model weights from {load_path}")
     return model
+
+def load_checkpoint(model: CustomModel, optimizer: torch.optim.Optimizer, load_path: str, device: str = "cpu") -> tuple[CustomModel, torch.optim.Optimizer]:
+    if not os.path.exists(load_path):
+        print(f"No checkpoint found at {load_path}")
+        model.to(device)
+        return model, optimizer
+
+    # Load to CPU first, then move to target device
+    checkpoint = torch.load(load_path, map_location="cpu")
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+    model.to(device)
+    print(f"Loaded checkpoint from {load_path}")
+    return model, optimizer
