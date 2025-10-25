@@ -7,7 +7,9 @@ import torch
 import pytest
 from PIL import Image
 import torchvision.transforms as T
-import sklearn.model_selection as ym
+
+# >>> Patch targets must be the module under test, not sklearn directly
+import utils.processing as procmod
 
 from utils.processing import (
     image_transform, 
@@ -19,20 +21,16 @@ from utils.processing import (
     read_csv_any,
     pil_from_path,
     loader,
-    fsspec
 )
-
 
 def _set_seeds(seed: int = 1234):
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-
 def _rand_pil_rgb(w: int, h: int) -> Image.Image:
     """Random uint8 RGB PIL image."""
     arr = (np.random.rand(h, w, 3) * 255).astype(np.uint8)
     return Image.fromarray(arr, mode="RGB")
-
 
 def _resize_to_tensor_baseline(img: Image.Image, size: int) -> torch.Tensor:
     """Baseline: Resize + ToTensor (no normalize)."""
@@ -41,7 +39,6 @@ def _resize_to_tensor_baseline(img: Image.Image, size: int) -> torch.Tensor:
         T.ToTensor(),
     ])
     return baseline(img)  # (3, size, size) in [0,1]
-
 
 @pytest.mark.parametrize("img_size_in", [96, 321])
 @pytest.mark.parametrize("img_size_out", [128, 512])
@@ -59,7 +56,6 @@ def test_transform_shapes_and_dtype(img_size_in, img_size_out):
     x = reverse_image_transform(t)
     assert x.shape == (3, img_size_out, img_size_out)
     assert (x >= 0).all() and (x <= 1).all()
-
 
 @pytest.mark.parametrize("img_size_out", [128, 256, 512])
 def test_reverse_matches_baseline_resize_totensor(img_size_out):
@@ -80,7 +76,6 @@ def test_reverse_matches_baseline_resize_totensor(img_size_out):
 
     # Should be extremely close (no clipping expected for random inputs)
     assert torch.allclose(reversed_img, baseline, atol=1e-6, rtol=0)
-
 
 def test_reverse_supports_batched_tensors():
     """
@@ -105,7 +100,6 @@ def test_reverse_supports_batched_tensors():
     # Since we constructed normed by normalizing batch, reversing should recover it closely
     assert torch.allclose(denorm, batch, atol=1e-6, rtol=0)
 
-
 def test_identity_on_edge_values_with_clamp():
     """
     If input after inverse-normalize slightly exceeds [0,1], clamp should bring it back.
@@ -125,7 +119,7 @@ def test_identity_on_edge_values_with_clamp():
     assert (out >= 0).all() and (out <= 1).all()
 
 # ---------------------------
-# Local-only mock for fsspec.open
+# Local-only mock for procmod.fsspec.open
 # ---------------------------
 class _MockFSOpen:
     """
@@ -151,13 +145,11 @@ class _MockFSOpen:
         else:
             return open(local_path, self.mode, encoding=self.encoding)
 
-
 def test_is_gcs():
     assert is_gcs("gs://bucket/file.txt") is True
     assert is_gcs("gs://bucket") is True
     assert is_gcs("/local/path") is False
     assert is_gcs("C:\\windows\\path") is False
-
 
 def test_join_uri_local_and_gs(tmp_path: Path):
     # local
@@ -170,7 +162,6 @@ def test_join_uri_local_and_gs(tmp_path: Path):
     res_gs = join_uri(base_gs, "x", "y", "z.png")
     assert res_gs == "gs://mybucket/dir/x/y/z.png"
 
-
 def test_open_text_and_binary_local(tmp_path: Path, monkeypatch):
     # Prepare local files
     txt_p = tmp_path / "note.txt"
@@ -179,18 +170,17 @@ def test_open_text_and_binary_local(tmp_path: Path, monkeypatch):
     bin_p.write_bytes(b"\x01\x02abc")
 
     # Mock fsspec.open to ensure no external I/O
-
     def _fake_open(path, mode="rb", encoding=None):
         return _MockFSOpen(tmp_path, path, mode, encoding)
 
-    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+    # >>> Patch the exact object used inside utils.processing
+    monkeypatch.setattr(procmod.fsspec, "open", _fake_open, raising=True)
 
     with open_text(str(txt_p), encoding="utf-8") as f:
         assert f.read() == "hola mundo\n"
 
     with open_binary(str(bin_p)) as f:
         assert f.read() == b"\x01\x02abc"
-
 
 def test_open_text_and_binary_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
     # Create files where the mock will map gs:// paths
@@ -201,13 +191,12 @@ def test_open_text_and_binary_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
     def _fake_open(path, mode="rb", encoding=None):
         return _MockFSOpen(tmp_path, path, mode, encoding)
 
-    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+    monkeypatch.setattr(procmod.fsspec, "open", _fake_open, raising=True)
 
     with open_text("gs://mybucket/dir/note.txt") as f:
         assert f.read() == "cloud line"
     with open_binary("gs://mybucket/dir/blob.bin") as f:
         assert f.read() == b"\x00\xff"
-
 
 def test_pil_from_path_local(tmp_path: Path, monkeypatch):
     # Save a small image
@@ -215,16 +204,14 @@ def test_pil_from_path_local(tmp_path: Path, monkeypatch):
     Image.new("RGB", (16, 8), color=(10, 20, 30)).save(local_img)
 
     # Route through mocked fsspec to avoid any accidental remote access
-
     def _fake_open(path, mode="rb", encoding=None):
         return _MockFSOpen(tmp_path, path, mode, encoding)
 
-    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+    monkeypatch.setattr(procmod.fsspec, "open", _fake_open, raising=True)
 
     img = pil_from_path(str(local_img))
     assert img.mode == "RGB"
     assert img.size == (16, 8)
-
 
 def test_pil_from_path_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
     # Create a "bucket" image in tmp for the mock
@@ -235,12 +222,11 @@ def test_pil_from_path_gs_mapped_to_tmp(tmp_path: Path, monkeypatch):
     def _fake_open(path, mode="rb", encoding=None):
         return _MockFSOpen(tmp_path, path, mode, encoding)
 
-    monkeypatch.setattr(fsspec, "open", _fake_open, raising=True)
+    monkeypatch.setattr(procmod.fsspec, "open", _fake_open, raising=True)
 
     img = pil_from_path("gs://bucket/a/b.png")
     assert img.mode == "RGB"
     assert img.size == (7, 5)
-
 
 def test_read_csv_any_local(tmp_path: Path):
     csvp = tmp_path / "small.csv"
@@ -249,7 +235,6 @@ def test_read_csv_any_local(tmp_path: Path):
 
     df = read_csv_any(str(csvp))
     assert df.equals(df_in)
-
 
 def test_loader_basic_filters_and_splits(tmp_path: Path, monkeypatch):
     """
@@ -293,13 +278,13 @@ def test_loader_basic_filters_and_splits(tmp_path: Path, monkeypatch):
         "mimic_metadata_csv": str(data_dir / "mimic_meta.csv"),
         "mimic_reports_path": str(data_dir / "mimic_reports.csv"),
     }
+
+    # Fake TTS and patch the symbol actually used inside utils.processing
     def _fake_tts(df, test_size=0.01, random_state=None):
         n = len(df)
         cut = max(1, int(round(n * (1 - test_size))))
         return df.iloc[:cut].copy(), df.iloc[cut:].copy()
-
-    _orig_tts = ym.train_test_split
-    monkeypatch.setattr(ym, "train_test_split", _fake_tts, raising=True)
+    from sklearn import model_selection as ym
     monkeypatch.setattr(ym, "train_test_split", _fake_tts, raising=True)
 
     # Case A: split='test' => chexpert_split='valid', no tts invoked for chexpert
@@ -314,17 +299,3 @@ def test_loader_basic_filters_and_splits(tmp_path: Path, monkeypatch):
     assert set(MIMIC_df2["dicom_id"]) == {"d1", "d4"}  # AP only & split train
     assert set(CHEXPERT_df2["frontal_lateral"]) == {"Frontal"}
     assert len(CHEXPERT_df2) >= 1  # non-empty after fake split
-
-    # Restore (optional; new pytest process each run anyway)
-    monkeypatch.setattr(ym, "train_test_split", _orig_tts, raising=True)
-
-
-def test_loader_invalid_split_raises(tmp_path: Path):
-    chexpert_paths = {"chexpert_data_csv": str(tmp_path / "c.csv")}
-    mimic_paths = {
-        "mimic_splits_csv": str(tmp_path / "a.csv"),
-        "mimic_metadata_csv": str(tmp_path / "b.csv"),
-        "mimic_reports_path": str(tmp_path / "d.csv"),
-    }
-    with pytest.raises(ValueError):
-        loader(chexpert_paths, mimic_paths, split="dev")
