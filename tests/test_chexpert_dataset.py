@@ -2,12 +2,16 @@
 from pathlib import Path
 import csv
 from PIL import Image
+import pandas as pd
 import pytest
 
 from utils.data.chexpert_dataset import (
     clean_text,
     clean_text_for_training,
     CheXpertDataset,
+    CHEXPERTDataset,
+    is_gcs,
+    join_uri,
 )
 
 # ----------------------------
@@ -159,6 +163,7 @@ def test_chexpertdataset_missing_impression_graceful(tmp_path: Path):
     assert item["label"] == ""
     assert Path(item["path"]).exists()
 
+
 def test_chexpertdataset_split_cleaning_behavior(tmp_path: Path):
     images_dir = tmp_path / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
@@ -175,7 +180,7 @@ def test_chexpertdataset_split_cleaning_behavior(tmp_path: Path):
     # Test split
     ds_test = CheXpertDataset(img_root=str(tmp_path), csv_path=str(csv_path), split="test", transform=None)
     item_test = ds_test[0]
-    expected_test_label = "mild cardiomegaly. physician to physician internal note." ## We cleaned the physician note only for train/valid to avoid model hallucinations
+    expected_test_label = "mild cardiomegaly. physician to physician internal note."  # cleaned less on test
     assert item_test["label"] == expected_test_label
 
     # Train split
@@ -189,3 +194,195 @@ def test_chexpertdataset_split_cleaning_behavior(tmp_path: Path):
     item_valid = ds_valid[0]
     expected_valid_label = "mild cardiomegaly."
     assert item_valid["label"] == expected_valid_label
+
+
+def _make_png(path: Path, size=(8, 6), color=(9, 8, 7)):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", size=size, color=color).save(path)
+
+
+def test_init_filters_local_existing_pngs(tmp_path: Path, monkeypatch):
+    """
+    When images_dir is LOCAL (not gs://), the constructor should filter rows
+    to those whose corresponding PNG files exist (JPG -> PNG swap).
+    """
+    images_dir = tmp_path / "PNG" / "train"
+    # Create two images expected to exist and one missing
+    _make_png(images_dir / "p/a.png")
+    _make_png(images_dir / "q/b.png")
+    # No file for r/c.png (should be filtered out)
+
+    df = pd.DataFrame(
+        {
+            "path_to_image": ["p/a.jpg", "q/b.jpg", "r/c.jpg"],
+            "section_impression": ["t1", "t2", "t3"],
+            "frontal_lateral": ["Frontal", "Frontal", "Frontal"],
+            "split": ["train", "train", "train"],
+        }
+    )
+
+    # Ensure the module's is_gcs returns False (local path)
+    assert is_gcs(str(images_dir)) is False
+
+    ds = CHEXPERTDataset(
+        dataframe=df,
+        images_dir=str(images_dir),
+        split="train",
+        transform=None,
+        text_col="section_impression",
+        path_col="path_to_image",
+    )
+
+    # Only the two existing PNGs should remain
+    assert len(ds) == 2
+    kept_paths = set(ds.df["path_to_image"].tolist())
+    assert kept_paths == {"p/a.jpg", "q/b.jpg"}
+
+
+def test__full_png_path_conversion_and_join(tmp_path: Path):
+    """
+    _full_png_path must replace .jpg -> .png and join correctly with images_dir root.
+    """
+    images_dir = tmp_path / "PNG" / "train"
+    ds = CHEXPERTDataset(
+        dataframe=pd.DataFrame({"path_to_image": ["folder/sample.jpg"], "section_impression": ["x"]}),
+        images_dir=str(images_dir),
+        split="train",
+        transform=None,
+    )
+    out = ds._full_png_path("folder/sample.jpg")
+    assert out == str(images_dir / "folder" / "sample.png")
+
+
+def test_getitem_train_uses_clean_text_for_training_and_transform(tmp_path: Path, monkeypatch):
+    """
+    For split 'train' (or 'valid'/'validate'), the class should call clean_text_for_training.
+    We monkeypatch clean_text_for_training to a sentinel function.
+    Also verify that a provided transform is applied.
+    """
+    images_dir = tmp_path / "PNG" / "train"
+    _make_png(images_dir / "z/k.png", size=(16, 12))
+
+    df = pd.DataFrame(
+        {
+            "path_to_image": ["z/k.jpg"],
+            "section_impression": ["Some raw  text\nwith  spaces"],
+            "split": ["train"],
+        }
+    )
+
+    # Monkeypatch the text cleaner on the module under test
+    import utils.data.chexpert_dataset as chexmod
+
+    def fake_clean_train(s: str) -> str:
+        return f"TRAIN::{s.strip()}"
+
+    monkeypatch.setattr(chexmod, "clean_text_for_training", fake_clean_train, raising=True)
+
+    # Provide a simple transform that tags output
+    def transform(img: Image.Image):
+        return ("XFORMED", img.size)
+
+    ds = CHEXPERTDataset(
+        dataframe=df,
+        images_dir=str(images_dir),
+        split="train",
+        transform=transform,
+    )
+
+    image, findings, img_path, report_path = ds[0]
+    # Transform applied
+    assert image[0] == "XFORMED"
+    assert image[1] == (16, 12)
+    # Cleaner used
+    assert findings.startswith("TRAIN::")
+    # Path correctness
+    assert img_path == str(images_dir / "z" / "k.png")
+    assert report_path == ""
+
+
+def test_getitem_test_uses_clean_text_with_gs_paths(monkeypatch):
+    """
+    For split 'test', the class should call clean_text.
+    We pass a gs:// images_dir and monkeypatch pil_from_path to avoid any I/O,
+    returning a synthetic image. Also monkeypatch clean_text.
+    """
+    import utils.data.chexpert_dataset as chexmod
+
+    # DataFrame with one row
+    df = pd.DataFrame(
+        {
+            "path_to_image": ["aa/bb.jpg"],
+            "section_impression": ["IMPR text"],
+            "split": ["test"],
+        }
+    )
+
+    # Confirm the path is GCS (no filtering in __init__)
+    images_dir = "gs://bucket/CheXpertPlus/PNG/test"
+
+    # Monkeypatch cleaners
+    def fake_clean(s: str) -> str:
+        return f"TEST::{s.lower()}"
+
+    monkeypatch.setattr(chexmod, "clean_text", fake_clean, raising=True)
+
+    # Monkeypatch the image loader to avoid I/O and force a known size
+    def fake_pil_loader(_):
+        return Image.new("RGB", (10, 4))
+
+    monkeypatch.setattr(chexmod, "pil_from_path", fake_pil_loader, raising=True)
+
+    # No transform (returns PIL)
+    ds = CHEXPERTDataset(
+        dataframe=df,
+        images_dir=images_dir,
+        split="test",
+        transform=None,
+    )
+
+    assert len(ds) == 1  # no filtering for gs://
+    image, findings, img_path, report_path = ds[0]
+
+    # Should be a PIL image, from our fake loader
+    assert isinstance(image, Image.Image)
+    assert image.size == (10, 4)
+
+    # Cleaner used for 'test'
+    assert findings == "TEST::impr text"
+
+    # Correct gs:// join and extension swap
+    expected_path = join_uri(images_dir, "aa/bb.png")
+    assert img_path == expected_path
+    assert report_path == ""
+
+
+def test_getitem_transform_applied_on_gs(monkeypatch):
+    """
+    Ensure a provided transform is applied even on GCS paths.
+    """
+    import utils.data.chexpert_dataset as chexmod
+
+    df = pd.DataFrame(
+        {"path_to_image": ["p/q.jpg"], "section_impression": ["X"], "split": ["test"]}
+    )
+    images_dir = "gs://bkt/PNG/test"
+
+    # Fake loader returning a known size image (5x5)
+    def fake_pil_loader(_):
+        return Image.new("RGB", (5, 5))
+
+    monkeypatch.setattr(chexmod, "pil_from_path", fake_pil_loader, raising=True)
+
+    # Fake cleaners
+    monkeypatch.setattr(chexmod, "clean_text", lambda s: s, raising=True)
+
+    # Transform
+    def transform(img: Image.Image):
+        return ("OK", img.size)
+
+    ds = CHEXPERTDataset(df, images_dir=images_dir, split="test", transform=transform)
+
+    img, txt, pth, _ = ds[0]
+    assert img == ("OK", (5, 5))
+    assert pth == join_uri(images_dir, "p/q.png")

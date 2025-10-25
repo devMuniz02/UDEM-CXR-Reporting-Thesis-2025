@@ -12,6 +12,8 @@ from PIL import Image, ImageFile
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
 
+from utils.processing import is_gcs, join_uri, pil_from_path
+
 # Configure PIL
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -58,7 +60,6 @@ def clean_text(text: str) -> str:
 
     return t
 
-
 def clean_text_for_training(
     text: str,
     cutoff: str = "physician to physician",
@@ -88,8 +89,6 @@ def clean_text_for_training(
 
     # Reuse the main cleaner to keep a single source of truth
     return cleaner(before)
-
-
 
 class CheXpertDataset(Dataset):
     """
@@ -176,3 +175,63 @@ class CheXpertDataset(Dataset):
         findings = "" if pd.isna(findings) else str(findings)
         findings = clean_text(findings) if self.split == "test" else clean_text_for_training(findings)
         return {"image": image, "label": findings, "path": full_path}
+
+class CHEXPERTDataset(Dataset):
+    """
+    Expects a DataFrame with columns:
+      - text_col: the report/impression text (default 'section_impression')
+      - path_col: relative path to image (default 'path_to_image', usually .jpg)
+    Provide images_dir as the base folder (local or gs://) of CheXpertPlus/PNG.
+    Automatically resolves split subfolder (train|valid|test) and swaps .jpg -> .png.
+    """
+    def __init__(
+        self,
+        dataframe: pd.DataFrame,
+        images_dir: str,
+        split: str = "train",
+        transform=None,
+        text_col: str = "section_impression",
+        path_col: str = "path_to_image"
+    ):
+        self.df = dataframe.reset_index(drop=True)
+        self.split = "train" if split in ["train", "valid", "validate"] else "test"
+        self.img_root = images_dir
+        self.transform = transform
+        self.text_col = text_col
+        self.path_col = path_col
+
+        if not is_gcs(images_dir):
+            print("Local images_dir detected; filtering rows with missing PNGs...")
+            keep_idx = []
+            for i, rel in enumerate(self.df[self.path_col].tolist()):
+                p = os.path.join(images_dir, rel.replace("\\", "/")).replace(".jpg", ".png")
+                if os.path.exists(p):
+                    keep_idx.append(i)
+            csv = self.df.iloc[keep_idx].reset_index(drop=True)
+            print(f"[INFO] Kept {len(csv)}/{len(self.df)} rows with existing PNGs")
+            self.df = csv.reset_index(drop=True)
+
+    def __len__(self):
+        return len(self.df)
+
+    def _full_png_path(self, rel: str) -> str:
+        p = str(rel).replace("\\", "/")
+        # Incoming rel often ends with .jpg; dataset is PNG
+        p_png = p.replace(".jpg", ".png")
+        return join_uri(self.img_root, p_png)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        rel = row[self.path_col]
+        image_path = self._full_png_path(rel)
+
+        # Load image from local/GCS
+        im = pil_from_path(image_path)
+        image = self.transform(im) if self.transform else im
+
+        # Clean text
+        findings = row[self.text_col]
+        findings = "" if pd.isna(findings) else str(findings)
+        findings = clean_text(findings) if self.split == "test" else clean_text_for_training(findings)
+
+        return image, findings, image_path, ""  # no report_path for CheXpert
