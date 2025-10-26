@@ -15,7 +15,6 @@ class DINOEncoder(nn.Module):
         if freeze:
             for p in self.model.parameters():
                 p.requires_grad = False
-
     @torch.no_grad()
     def forward(self, pixel_values: torch.Tensor) -> torch.Tensor:
         """
@@ -44,7 +43,8 @@ class DinoUNet(nn.Module):
             for m in (self.encoder, self.channel_adapter, self.decoder):
                 for p in m.parameters():
                     p.requires_grad = False
-
+    
+    @torch.no_grad()
     def forward(self, x: torch.Tensor, num_layers: int) -> torch.Tensor:
         """
         x: [B, C, H, W]; returns mask: [B, 1, H', W'] (your upsampling stack defines H',W')
@@ -79,6 +79,10 @@ class CustomModel(nn.Module):
         SEGMENTER_MODEL_PATH: str | None = "dino_segmenter.pth",
         DECODER_MODEL_PATH: str | None = "dino_decoder.pth",
         LINEAR_PROJECTION_PATH: str | None = "linear_projection.pth",
+        freeze_encoder: bool = True,
+        freeze_segmenter: bool = True,
+        freeze_linear_projection: bool = False,
+        freeze_decoder: bool = False,
     ):
         super().__init__()
         self.device = torch.device(device)
@@ -88,18 +92,24 @@ class CustomModel(nn.Module):
         if ENCODER_MODEL_PATH and os.path.exists(ENCODER_MODEL_PATH):
             self.encoder.load_state_dict(torch.load(ENCODER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded encoder weights from", ENCODER_MODEL_PATH)
+        if freeze_encoder:
+            self.encoder.eval()
 
         # Segmenter
         self.segmenter = DinoUNet()
         if SEGMENTER_MODEL_PATH and os.path.exists(SEGMENTER_MODEL_PATH):
             self.segmenter.load_state_dict(torch.load(SEGMENTER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded segmenter weights from", SEGMENTER_MODEL_PATH)
+        if freeze_segmenter:
+            self.segmenter.eval()
 
         # Decoder (modified GPT-2)
         self.decoder = create_decoder()  # must expose .config.hidden_size & .config.num_hidden_layers
         if DECODER_MODEL_PATH and os.path.exists(DECODER_MODEL_PATH):
             self.decoder.load_state_dict(torch.load(DECODER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded decoder weights from", DECODER_MODEL_PATH)
+        if freeze_decoder:
+            self.decoder.eval()
 
         # Linear projection: DINO hidden -> GPT2 hidden
         enc_h = self.encoder.model.config.hidden_size
@@ -108,6 +118,8 @@ class CustomModel(nn.Module):
         if LINEAR_PROJECTION_PATH and os.path.exists(LINEAR_PROJECTION_PATH):
             self.linear_projection.load_state_dict(torch.load(LINEAR_PROJECTION_PATH, map_location="cpu"), strict=False)
             print("Loaded linear projection weights from", LINEAR_PROJECTION_PATH)
+        if freeze_linear_projection:
+            self.linear_projection.eval()
 
         # Tokenizer (pad token for GPT-2)
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
