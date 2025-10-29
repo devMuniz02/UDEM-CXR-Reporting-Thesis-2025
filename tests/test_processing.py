@@ -299,3 +299,109 @@ def test_loader_basic_filters_and_splits(tmp_path: Path, monkeypatch):
     assert set(MIMIC_df2["dicom_id"]) == {"d1", "d4"}  # AP only & split train
     assert set(CHEXPERT_df2["frontal_lateral"]) == {"Frontal"}
     assert len(CHEXPERT_df2) >= 1  # non-empty after fake split
+
+# --- Additional tests for missing functions in utils.processing ---
+
+import gzip
+import io as _pyio
+import pandas as _pd
+from types import SimpleNamespace
+
+# _fs_and_path ---------------------------------------------------------------
+
+def test__fs_and_path_monkeypatched_url_to_fs(monkeypatch):
+    # Arrange: fake url_to_fs that echoes protocol/path
+    def _fake_url_to_fs(path):
+        # Return (fs_like, path_in_fs)
+        fs = SimpleNamespace(protocol="gs", exists=lambda p: True)
+        return fs, "bucket/dir/file.txt"
+
+    monkeypatch.setattr(procmod, "url_to_fs", _fake_url_to_fs, raising=True)
+
+    # Act
+    fs, p = procmod._fs_and_path("gs://bucket/dir/file.txt")
+
+    # Assert
+    assert getattr(fs, "protocol", None) == "gs"
+    assert p == "bucket/dir/file.txt"
+
+
+# exists --------------------------------------------------------------------
+
+def test_exists_uses_fs_exists_true(monkeypatch):
+    # fs.exists returns True
+    class _FS:
+        protocol = "gs"
+        def exists(self, p): return True
+
+    monkeypatch.setattr(procmod, "url_to_fs", lambda path: (_FS(), "x/y/z"), raising=True)
+    assert procmod.exists("gs://any/thing") is True
+
+def test_exists_uses_fs_exists_false(monkeypatch):
+    # fs.exists returns False
+    class _FS:
+        protocol = "gs"
+        def exists(self, p): return False
+
+    monkeypatch.setattr(procmod, "url_to_fs", lambda path: (_FS(), "x/y/z"), raising=True)
+    assert procmod.exists("gs://any/thing") is False
+
+def test_exists_fallback_to_os_path_when_fs_errors(tmp_path, monkeypatch):
+    # When fs.exists raises AND protocol=='file', function should fallback to os.path.exists
+    target = tmp_path / "a/b/c.txt"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("ok")
+
+    class _FS:
+        protocol = "file"
+        def exists(self, p):  # simulate broken fs.exists
+            raise RuntimeError("boom")
+
+    # Map the incoming path to the real local path in url_to_fs result
+    local_path = str(target)
+    monkeypatch.setattr(procmod, "url_to_fs", lambda path: (_FS(), local_path), raising=True)
+
+    # Should fallback to os.path.exists(local_path) -> True
+    assert procmod.exists("file://" + local_path) is True
+
+    # And for a non-existent path -> False
+    missing_local = str(target.parent / "missing.txt")
+    monkeypatch.setattr(procmod, "url_to_fs", lambda path: (_FS(), missing_local), raising=True)
+    assert procmod.exists("file://" + missing_local) is False
+
+
+# read_csv_any --------------------------------------------------------------
+
+def test_read_csv_any_reads_gz_local(tmp_path: Path):
+    # Create a gzipped CSV and ensure read_csv_any can read it
+    df_in = _pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "c"]})
+    gz_path = tmp_path / "table.csv.gz"
+    with gzip.open(gz_path, "wt", encoding="utf-8") as f:
+        df_in.to_csv(f, index=False)
+
+    df = read_csv_any(str(gz_path))
+    assert df.equals(df_in)
+
+def test_read_csv_any_kwargs_passthrough(monkeypatch, tmp_path: Path):
+    # Verify that read_csv_any forwards kwargs to pandas.read_csv
+    called = {}
+
+    def _fake_read_csv(path, storage_options=None, **kwargs):
+        called["path"] = path
+        called["storage_options"] = storage_options
+        called["kwargs"] = kwargs
+        # Return a trivial frame
+        return _pd.DataFrame({"ok": [1]})
+
+    monkeypatch.setattr(_pd, "read_csv", _fake_read_csv, raising=True)
+
+    p = tmp_path / "dummy.csv"
+    p.write_text("ok\n1\n")
+
+    df = read_csv_any(str(p), dtype={"ok": int}, nrows=1)
+    assert "ok" in df.columns and df.shape == (1, 1)
+    # Ensure kwargs + storage_options were passed as defined in the helper
+    assert called["path"] == str(p)
+    assert called["storage_options"] is None
+    assert called["kwargs"].get("dtype") == {"ok": int}
+    assert called["kwargs"].get("nrows") == 1

@@ -2,12 +2,14 @@ import torch
 import torchvision.transforms as T
 import fsspec
 import io
+import os
 from pathlib import Path, PurePosixPath
 from typing import Tuple
 
 import pandas as pd
 from PIL import Image
 import sklearn.model_selection as ym
+from fsspec.core import url_to_fs
 
 def image_transform(img_size=512):
     return T.Compose([
@@ -27,6 +29,21 @@ def reverse_image_transform(tensor):
 
 def is_gcs(path: str) -> bool:
     return str(path).startswith("gs://")
+
+def _fs_and_path(path: str):
+    """Return (fs, path_in_fs) using fsspec.url_to_fs for both gs:// and local paths."""
+    fs, fs_path = url_to_fs(path)
+    return fs, fs_path
+
+def exists(path: str) -> bool:
+    fs, p = _fs_and_path(path)
+    try:
+        return fs.exists(p)
+    except Exception:
+        # Fallback: for local filesystem, use os.path
+        if getattr(fs, "protocol", None) == "file":
+            return os.path.exists(p)
+        raise
 
 def join_uri(base: str, *parts: str) -> str:
     """
