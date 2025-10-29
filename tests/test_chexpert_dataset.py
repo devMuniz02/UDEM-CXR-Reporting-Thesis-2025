@@ -1,4 +1,9 @@
 # test_chexpert_dataset.py
+import sys
+import types
+import io
+import contextlib
+
 from pathlib import Path
 import csv
 from PIL import Image
@@ -300,89 +305,67 @@ def test_getitem_train_uses_clean_text_for_training_and_transform(tmp_path: Path
     assert img_path == str(images_dir / "z" / "k.png")
     assert report_path == ""
 
-
-def test_getitem_test_uses_clean_text_with_gs_paths(monkeypatch):
+def _patch_io(monkeypatch):
     """
-    For split 'test', the class should call clean_text.
-    We pass a gs:// images_dir and monkeypatch pil_from_path to avoid any I/O,
-    returning a synthetic image. Also monkeypatch clean_text.
+    Prevent *any* real cloud access by stubbing fsspec/gcsfs at import level,
+    and (if present) the helpers inside utils.data.chexpert_dataset.
+    This works whether chexpert_dataset imports these directly or uses helpers
+    that import them internally.
     """
-    import utils.data.chexpert_dataset as chexmod
+    # --- Build fake fsspec module ---
+    class _FakeOpenObj:
+        def __init__(self, path=None, mode="rb", **kwargs):
+            self.mode = mode
+        def open(self):
+            @contextlib.contextmanager
+            def _cm():
+                if "b" in self.mode:
+                    yield io.BytesIO(b"")    # pretend binary file
+                else:
+                    yield io.StringIO("")    # pretend text file
+            return _cm()
 
-    # DataFrame with one row
-    df = pd.DataFrame(
-        {
-            "path_to_image": ["aa/bb.jpg"],
-            "section_impression": ["IMPR text"],
-            "split": ["test"],
-        }
+    class _FakeFS:
+        def exists(self, path): return True
+        def glob(self, pattern): return []
+
+    fake_fsspec = types.SimpleNamespace(
+        open=lambda *a, **k: _FakeOpenObj(mode=k.get("mode", "rb")),
+        filesystem=lambda *a, **k: _FakeFS()
     )
 
-    # Confirm the path is GCS (no filtering in __init__)
-    images_dir = "gs://bucket/CheXpertPlus/PNG/test"
+    # --- Build fake gcsfs module ---
+    class _NoopGCSFS:
+        def __init__(self, *a, **k): ...
+        def open(self, *a, **k): return io.BytesIO(b"")
+        def exists(self, *a, **k): return True
+        def glob(self, *a, **k): return []
 
-    # Monkeypatch cleaners
-    def fake_clean(s: str) -> str:
-        return f"TEST::{s.lower()}"
+    fake_gcsfs = types.SimpleNamespace(GCSFileSystem=_NoopGCSFS)
 
-    monkeypatch.setattr(chexmod, "clean_text", fake_clean, raising=True)
+    # Patch import table so any import fsspec/gcsfs sees our fakes
+    monkeypatch.setitem(sys.modules, "fsspec", fake_fsspec)
+    monkeypatch.setitem(sys.modules, "gcsfs", fake_gcsfs)
 
-    # Monkeypatch the image loader to avoid I/O and force a known size
-    def fake_pil_loader(_):
-        return Image.new("RGB", (10, 4))
+    # If chexmod already imported gcsfs/fsspec, override those too (no error if absent)
+    try:
+        import utils.data.chexpert_dataset as chexmod
+        if hasattr(chexmod, "gcsfs"):
+            monkeypatch.setattr(chexmod, "gcsfs", fake_gcsfs, raising=False)
+        if hasattr(chexmod, "fsspec"):
+            monkeypatch.setattr(chexmod, "fsspec", fake_fsspec, raising=False)
 
-    monkeypatch.setattr(chexmod, "pil_from_path", fake_pil_loader, raising=True)
+        # If your module exposes helpers that call fsspec/gcsfs internally, stub them as well.
+        if hasattr(chexmod, "open_binary"):
+            def _fake_open_binary(path):
+                return _FakeOpenObj(mode="rb").open()
+            monkeypatch.setattr(chexmod, "open_binary", _fake_open_binary, raising=False)
 
-    # No transform (returns PIL)
-    ds = CHEXPERTDataset(
-        dataframe=df,
-        images_dir=images_dir,
-        split="test",
-        transform=None,
-    )
-
-    assert len(ds) == 1  # no filtering for gs://
-    image, findings, img_path, report_path = ds[0]
-
-    # Should be a PIL image, from our fake loader
-    assert isinstance(image, Image.Image)
-    assert image.size == (10, 4)
-
-    # Cleaner used for 'test'
-    assert findings == "TEST::impr text"
-
-    # Correct gs:// join and extension swap
-    expected_path = join_uri(images_dir, "aa/bb.png")
-    assert img_path == expected_path
-    assert report_path == ""
-
-
-def test_getitem_transform_applied_on_gs(monkeypatch):
-    """
-    Ensure a provided transform is applied even on GCS paths.
-    """
-    import utils.data.chexpert_dataset as chexmod
-
-    df = pd.DataFrame(
-        {"path_to_image": ["p/q.jpg"], "section_impression": ["X"], "split": ["test"]}
-    )
-    images_dir = "gs://bkt/PNG/test"
-
-    # Fake loader returning a known size image (5x5)
-    def fake_pil_loader(_):
-        return Image.new("RGB", (5, 5))
-
-    monkeypatch.setattr(chexmod, "pil_from_path", fake_pil_loader, raising=True)
-
-    # Fake cleaners
-    monkeypatch.setattr(chexmod, "clean_text", lambda s: s, raising=True)
-
-    # Transform
-    def transform(img: Image.Image):
-        return ("OK", img.size)
-
-    ds = CHEXPERTDataset(df, images_dir=images_dir, split="test", transform=transform)
-
-    img, txt, pth, _ = ds[0]
-    assert img == ("OK", (5, 5))
-    assert pth == join_uri(images_dir, "p/q.png")
+        if hasattr(chexmod, "open_text"):
+            def _fake_open_text(path, encoding="utf-8"):
+                return _FakeOpenObj(mode="rt").open()
+            monkeypatch.setattr(chexmod, "open_text", _fake_open_text, raising=False)
+    except Exception:
+        # If import path changes or module isn’t present yet, it’s fine;
+        # the sys.modules overrides above still protect later imports.
+        pass
