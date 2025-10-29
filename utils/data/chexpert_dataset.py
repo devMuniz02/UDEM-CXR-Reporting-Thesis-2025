@@ -5,6 +5,7 @@
 import os
 import re
 import string
+import gcsfs
 
 # Third-party imports
 import pandas as pd
@@ -200,16 +201,23 @@ class CHEXPERTDataset(Dataset):
         self.text_col = text_col
         self.path_col = path_col
 
-        if not is_gcs(images_dir):
-            print("Local images_dir detected; filtering rows with missing PNGs...")
-            keep_idx = []
-            for i, rel in enumerate(self.df[self.path_col].tolist()):
-                p = os.path.join(images_dir, rel.replace("\\", "/")).replace(".jpg", ".png")
-                if os.path.exists(p):
-                    keep_idx.append(i)
-            csv = self.df.iloc[keep_idx].reset_index(drop=True)
-            print(f"[INFO] Kept {len(csv)}/{len(self.df)} rows with existing PNGs")
-            self.df = csv.reset_index(drop=True)
+        print("Filtering rows with missing PNGs...")
+
+        is_gcs = images_dir.startswith("gs://")
+        fs = gcsfs.GCSFileSystem() if is_gcs else None
+        keep_idx = []
+
+        for i, rel in enumerate(self.df[self.path_col].tolist()):
+            rel_path = rel.replace("\\", "/").replace(".jpg", ".png")
+            full_path = f"{images_dir.rstrip('/')}/{rel_path}" if is_gcs else os.path.join(images_dir, rel_path)
+
+            exists = fs.exists(full_path) if is_gcs else os.path.exists(full_path)
+            if exists:
+                keep_idx.append(i)
+
+        csv = self.df.iloc[keep_idx].reset_index(drop=True)
+        print(f"[INFO] Kept {len(csv)}/{len(self.df)} rows with existing PNGs")
+        self.df = csv
 
     def __len__(self):
         return len(self.df)
