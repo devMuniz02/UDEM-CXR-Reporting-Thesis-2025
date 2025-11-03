@@ -132,7 +132,7 @@ class CustomModel(nn.Module):
         # move everything once
         self.to(self.device)
 
-    def forward(self, pixel_values: torch.Tensor, tgt_ids: torch.Tensor | None = None):
+    def forward(self, pixel_values: torch.Tensor, tgt_ids: torch.Tensor | None = None, **kwargs) -> dict:
         """
         pixel_values: [B,C,H,W], float
         tgt_ids: [B,T], long (token IDs), padded with pad_token_id if any padding is present
@@ -149,6 +149,8 @@ class CustomModel(nn.Module):
         # Text path (optional teacher-forced training)
         labels = None
         if tgt_ids is not None:
+            if tgt_ids.dtype != torch.long:
+                tgt_ids = tgt_ids.long()
             tgt_ids = tgt_ids.to(self.device, non_blocking=True)       # [B,T]
             text_embeds = self.decoder.transformer.wte(tgt_ids)        # [B,T,n_embd]
             inputs_embeds = torch.cat([projected_patches, text_embeds], dim=1)  # [B,Np+T,n_embd]
@@ -163,7 +165,7 @@ class CustomModel(nn.Module):
             inputs_embeds = projected_patches
 
         # Decoder forward
-        out = self.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers, labels=labels)
+        out = self.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers, labels=labels, **kwargs)
         return out
 
 def create_complete_model(device: str = "cuda", **kwargs) -> CustomModel:
