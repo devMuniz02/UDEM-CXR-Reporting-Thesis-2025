@@ -707,5 +707,6 @@ def create_decoder(attention = "sdpa"):
     config._attn_implementation = attention
     new_max_positions = 2048
     decoder = GPT2LMHeadModelModified.from_pretrained("gpt2", config=config)
+    decoder.config._attn_implementation = attention
     decoder = expand_gpt2_positional_embeddings(decoder, new_max_positions=new_max_positions, mode="linear")
     return decoder
