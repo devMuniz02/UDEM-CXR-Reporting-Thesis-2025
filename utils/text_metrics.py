@@ -260,7 +260,7 @@ def evaluate_all_metrics(generated: TextLike,
     gen, ref = _as_lists(generated, original)
 
     cx = chexbert_metrics(gen, ref)
-    bs = bertscore_metric(gen, ref)
+    # bs = bertscore_metric(gen, ref)
 
     # Always compute RadGraph variants like before
     rg_e, rg_er, _ = radgraph_metric(gen, ref)
@@ -279,6 +279,8 @@ def evaluate_all_metrics(generated: TextLike,
             "radgraph_f1_RG_ER": rg_er,
             # "rouge_l": rouge_l_score(gen, ref), 
         }
+    
+    bs = bertscore_metric(gen, ref)
 
     return {
         # classic
