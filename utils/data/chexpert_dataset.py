@@ -191,7 +191,7 @@ class CHEXPERTDataset(Dataset):
         images_dir: str,
         split: str = "train",
         transform=None,
-        text_col: str = "section_impression",
+        text_col: str = "section_findings",
         path_col: str = "path_to_image"
     ):
         self.df = dataframe.reset_index(drop=True)
