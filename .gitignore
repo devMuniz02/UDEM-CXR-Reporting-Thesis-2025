@@ -17,6 +17,7 @@ utils/__pycache__/
 # Ignore model weights and checkpoints
 *.pth
 *.pt
+*.safetensor
 
 # Ignore TensorBoard logs
 runs/
