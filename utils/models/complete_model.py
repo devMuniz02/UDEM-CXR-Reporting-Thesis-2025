@@ -84,8 +84,10 @@ class CustomModel(nn.Module):
         freeze_linear_projection: bool = False,
         freeze_decoder: bool = False,
         attention_implementation: str = "sdpa",
+        use_segmentation_mask: bool = True,
     ):
         super().__init__()
+        self.use_segmentation_mask = use_segmentation_mask
         self.device = torch.device(device)
 
         # Encoder
@@ -166,7 +168,7 @@ class CustomModel(nn.Module):
             inputs_embeds = projected_patches
 
         # Decoder forward
-        out = self.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers, labels=labels, **kwargs)
+        out = self.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers if self.use_segmentation_mask else None, labels=labels, **kwargs)
         return out
     
     @torch.inference_mode()
@@ -198,7 +200,7 @@ class CustomModel(nn.Module):
             eos_token_id=self.tokenizer.eos_token_id,
             pad_token_id=self.pad_token_id,
             use_cache=True,
-            segmentation_mask=segmented_layers,
+            segmentation_mask=segmented_layers if self.use_segmentation_mask else None,
             prefix_allowed_length=0,
             plot_attention_mask=False,
             plot_attention_mask_layer=[],
