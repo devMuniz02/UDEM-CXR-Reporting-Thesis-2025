@@ -44,5 +44,15 @@ Thumbs.db
 # Ignore VS Code settings
 .vscode/
 
+# Ignore temporary files
 temp*.ipynb
 temp*.py
+
+# Ignore pytest cache
+.pytest_cache/
+
+# Ignore checkpoints folder
+checkpoints/
+
+# Ignore models folder
+models/
