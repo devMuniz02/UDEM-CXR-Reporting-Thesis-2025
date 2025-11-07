@@ -907,7 +907,7 @@ class DinoGPT2Captioner(nn.Module):
     def generate_with_logging(
         self,
         pixel_values: torch.Tensor,            # [B, C, H, W]
-        input_ids: torch.Tensor,               # [B, Ttxt] prompt
+        # input_ids: torch.Tensor,               # [B, Ttxt] prompt
         max_new_tokens: int = 256,
         tokenizer=None,
         **kwargs,                               # preset/do_sample/temperature/top_p/top_k/etc.
