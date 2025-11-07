@@ -220,5 +220,6 @@ def plot_layers_any(
             axes[rr, cc].axis("off")
 
         plt.tight_layout()
+        plt.show()
         figs.append((fig, axes))
     return figs
