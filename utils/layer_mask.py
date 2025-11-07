@@ -196,7 +196,7 @@ def plot_layers_any(
         # number of rows for this batch
         r = rows_needed(L)
         fig, axes = plt.subplots(r, cols, figsize=(cols * 3, r * 3), squeeze=False)
-        fig.suptitle(f"Masks for input {b} out of {B}", fontsize=12, y=1.02)
+        fig.suptitle(f"Masks for input {b+1} out of {B}", fontsize=12, y=1.02)
 
         for l in range(L):
             rr = l // cols
