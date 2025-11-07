@@ -631,11 +631,11 @@ class VisualPrefixGPT2(nn.Module):
     @torch.no_grad()
     def generate_with_logging(
         self,
-        visual_tokens: torch.Tensor,        # [B, Tvis, Dv]  (already in image-embedding space)
-        input_ids: torch.Tensor,            # [B, Ttxt]      (prompt tokens)
+        visual_tokens: torch.Tensor,      # [B, Tvis, Dv]  (already in image-embedding space)
+        # input_ids: torch.Tensor,        # [B, Ttxt]      (prompt tokens) <--- REMOVED
         max_new_tokens: int = 256,
         # preset / overrides
-        preset: str = "safe_sample",        # "greedy" | "safe_sample" | "creative"
+        preset: str = "safe_sample",      # "greedy" | "safe_sample" | "creative"
         do_sample: bool | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
@@ -643,12 +643,12 @@ class VisualPrefixGPT2(nn.Module):
         repetition_penalty: float | None = None,
         no_repeat_ngram_size: int | None = None,
         # stopping/logging
-        tokenizer=None,                     # if None, uses self.tokenizer
+        tokenizer=None,                   # if None, uses self.tokenizer
         stop_sequences: list[str] | None = None,
         log_first_n_steps: int = 6,
         log_topk: int = 5,
         return_text: bool = True,
-        min_gen_before_eos: int = 1,        # ban EOS for first N generated tokens
+        min_gen_before_eos: int = 1,      # ban EOS for first N generated tokens
     ) -> dict:
         """
         Logs top-k candidates, entropy, EOS/stop triggers, and repetition stats.
@@ -658,10 +658,15 @@ class VisualPrefixGPT2(nn.Module):
             "sequences": LongTensor[B, Tmax]  # text-only (prompt + generated), padded with pad_token_id
         }
         """
-        device = input_ids.device
+        # MODIFICATION 1: Get device from visual_tokens
+        device = visual_tokens.device
         tok = tokenizer or self.tokenizer
         pad_id = tok.pad_token_id if tok.pad_token_id is not None else tok.eos_token_id
         eos_id = tok.eos_token_id
+        
+        # MODIFICATION 2: Get bos_id to start generation
+        bos_id = tok.bos_token_id
+        assert bos_id is not None, "Tokenizer must have a bos_token_id to generate from scratch"
 
         def _preset(name: str):
             name = (name or "safe_sample").lower()
@@ -759,8 +764,12 @@ class VisualPrefixGPT2(nn.Module):
         seqs = []
 
         for b in range(B):
-            prefix = prefix_all[b:b+1]                    # [1, Tvis, n_embd]
-            seq = input_ids[b:b+1].clone()               # [1, Ttxt]
+            prefix = prefix_all[b:b+1]                  # [1, Tvis, n_embd]
+            
+            # MODIFICATION 3: Initialize seq with bos_id instead of input_ids
+            prompt_seq = torch.tensor([[bos_id]], dtype=torch.long, device=device)
+            seq = prompt_seq.clone()                    # [1, 1] (starts with BOS)
+            
             gen_only: list[int] = []
             step_logs = []
             hit_eos_at = None
@@ -770,7 +779,7 @@ class VisualPrefixGPT2(nn.Module):
 
             for step in range(max_new_tokens):
                 # build embeds for current text sequence
-                text_embeds = self.model.transformer.wte(seq)          # [1, Ttxt, n_embd]
+                text_embeds = self.model.transformer.wte(seq)        # [1, Ttxt, n_embd]
                 full_embeds = torch.cat([prefix, text_embeds], dim=1)  # [1, Tvis+Ttxt, n_embd]
 
                 # attention mask (1s everywhere)
@@ -778,7 +787,7 @@ class VisualPrefixGPT2(nn.Module):
                 full_mask = torch.cat([vis_mask, text_mask], dim=1)                # [1, Tvis+Ttxt]
 
                 out = self.model(inputs_embeds=full_embeds, attention_mask=full_mask)
-                logits = out.logits[:, -1, :].squeeze(0)                # [V]
+                logits = out.logits[:, -1, :].squeeze(0)             # [V]
 
                 # safety
                 if (len(gen_only) < min_gen_before_eos) and eos_id is not None:
@@ -823,8 +832,8 @@ class VisualPrefixGPT2(nn.Module):
                         if _ends_with(seq[0].tolist(), sfx):
                             hit_eos_at = len(gen_only) - 1
                             break
-                if hit_eos_at is not None:
-                    break
+                    if hit_eos_at is not None:
+                        break
 
             # repetition stats & text
             rep_stats = {
@@ -841,7 +850,8 @@ class VisualPrefixGPT2(nn.Module):
                 "preset": preset,
                 "params": cfg,
                 "lengths": {
-                    "prompt_tokens": int(input_ids[b:b+1].size(1)),
+                    # MODIFICATION 4: Log length of new prompt_seq
+                    "prompt_tokens": int(prompt_seq.size(1)),
                     "new_tokens": len(gen_only),
                     "total_tokens": int(seq.size(1)),
                 },
