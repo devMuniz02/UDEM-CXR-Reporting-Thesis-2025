@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from transformers import GPT2Tokenizer
+from tqdm import tqdm
 
 class SimpleWordTokenizer:
     def __init__(self, texts, bos="<bos>", eos="<eos>", pad="<pad>", unk="<unk>"):
@@ -113,16 +114,29 @@ def batch_perplexity(logits, labels, pad_id):
     import math
     return math.exp(sequence_ce_loss(logits, labels, pad_id).item())
 
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+pad_id = tokenizer.pad_token_id
 
-def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, loss_fn=sequence_ce_loss, grad_clip=1.0):
+def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, grad_clip, loss_fn): # [FIX] Added missing functions to signature for clarity
     model.train()
     total_loss, total_pp, steps = 0.0, 0.0, 0
-    from tqdm import tqdm
-    for pixel_values, tgt_ids, *_ in tqdm(loader, desc="Training", total=num_batches):
+    for pixel_values, findings, *_ in tqdm(loader, desc="Training", total=num_batches):
         pixel_values = pixel_values.to(device, non_blocking=True)
-        tgt_ids = tgt_ids.to(device, non_blocking=True)
-        input_ids = tgt_ids[:, :-1]
-        labels = tgt_ids[:, 1:]
+        
+        # [FIX] Tokenization happens on CPU *first*. `findings` is a list of strings.
+        tgt_ids = tokenizer.batch_encode_plus(findings, return_tensors="pt", padding=True)
+        
+        # [FIX] Get the tensor from the dict and move *it* to the device
+        token_ids_tensor = tgt_ids['input_ids'].to(device, non_blocking=True)
+
+        # [FIX] Create input_ids and labels from the tensor
+        input_ids = token_ids_tensor[:, :-1]
+        labels = token_ids_tensor[:, 1:]
+        
+        # [FIX] Removed findings.to(device) as it was incorrect
+
         optimizer.zero_grad(set_to_none=True)
         with torch.cuda.amp.autocast(dtype=torch.bfloat16):
             logits = model(pixel_values, input_ids)
@@ -136,7 +150,9 @@ def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, loss_
         total_loss += loss.item()
         total_pp += ppl
         steps += 1
-        del pixel_values, tgt_ids, input_ids, labels, logits, loss, ppl
+        
+        # [FIX] Updated del statement to include the new variable
+        del pixel_values, findings, tgt_ids, token_ids_tensor, input_ids, labels, logits, loss, ppl
         torch.cuda.empty_cache()
         if steps > num_batches:
             break
@@ -146,12 +162,19 @@ def train_one_epoch(model, loader, optimizer, device, pad_id, num_batches, loss_
 def evaluate(model, loader, device, pad_id, num_batches, loss_fn=sequence_ce_loss):
     model.eval()
     total_loss, total_pp, steps = 0.0, 0.0, 0
-    from tqdm import tqdm
-    for pixel_values, tgt_ids, *_ in tqdm(loader, desc="Evaluating", total=num_batches):
+    for pixel_values, findings, *_ in tqdm(loader, desc="Evaluating", total=num_batches):
         pixel_values = pixel_values.to(device, non_blocking=True)
-        tgt_ids = tgt_ids.to(device, non_blocking=True)
-        input_ids = tgt_ids[:, :-1]
-        labels = tgt_ids[:, 1:]
+        # [FIX] Tokenization happens on CPU *first*. `findings` is a list of strings.
+        tgt_ids = tokenizer.batch_encode_plus(findings, return_tensors="pt", padding=True)
+        
+        # [FIX] Get the tensor from the dict and move *it* to the device
+        token_ids_tensor = tgt_ids['input_ids'].to(device, non_blocking=True)
+
+        # [FIX] Create input_ids and labels from the tensor
+        input_ids = token_ids_tensor[:, :-1]
+        labels = token_ids_tensor[:, 1:]
+        
+        # [FIX] Removed findings.to(device) as it was incorrect
         logits = model(pixel_values, input_ids)
         loss = loss_fn(logits, labels, pad_id)
         ppl = batch_perplexity(logits, labels, pad_id)
