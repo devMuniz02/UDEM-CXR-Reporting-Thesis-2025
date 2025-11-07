@@ -83,6 +83,7 @@ class CustomModel(nn.Module):
         freeze_segmenter: bool = True,
         freeze_linear_projection: bool = False,
         freeze_decoder: bool = False,
+        attention_implementation: str = "sdpa",
     ):
         super().__init__()
         self.device = torch.device(device)
@@ -104,7 +105,7 @@ class CustomModel(nn.Module):
             self.segmenter.eval()
 
         # Decoder (modified GPT-2)
-        self.decoder = create_decoder()  # must expose .config.hidden_size & .config.num_hidden_layers
+        self.decoder = create_decoder(attention=attention_implementation)  # must expose .config.hidden_size & .config.num_hidden_layers
         if DECODER_MODEL_PATH and os.path.exists(DECODER_MODEL_PATH):
             self.decoder.load_state_dict(torch.load(DECODER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded decoder weights from", DECODER_MODEL_PATH)
@@ -167,6 +168,50 @@ class CustomModel(nn.Module):
         # Decoder forward
         out = self.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers, labels=labels, **kwargs)
         return out
+    
+    @torch.inference_mode()
+    def generate(
+        self,
+        pixel_values: torch.Tensor,
+        max_new_tokens: int = 100,
+        output_attentions: bool = False,
+    ) -> torch.Tensor:
+        """
+        pixel_values: [B,C,H,W], float
+        returns generated_ids: [B, T]
+        """
+        pixel_values = pixel_values.to(self.device, non_blocking=True)
+
+        # Visual path
+        patches = self.encoder(pixel_values)                           # [B,Np,Cenc]
+        projected_patches = self.linear_projection(patches)            # [B,Np,n_embd]
+
+        # Segmentation path per layer
+        segmented_layers = self.segmenter(pixel_values, self.num_layers) # [B,n_layers,H,W] (per current decoder)
+
+        # Generate
+        output = self.decoder.generate(
+            inputs_embeds=projected_patches,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,
+            repetition_penalty=1.2,
+            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.pad_token_id,
+            use_cache=True,
+            segmentation_mask=segmented_layers,
+            prefix_allowed_length=0,
+            plot_attention_mask=False,
+            plot_attention_mask_layer=[],
+            plot_attention_map=False,
+            plot_attention_map_layer=[],
+            plot_attention_map_generation=0,
+            output_attentions=output_attentions,
+            return_dict_in_generate=True,
+        )
+        # Remove prefix tokens (vision)
+        generated_ids = output.sequences#[:, projected_patches.shape[1]:]   # [B,T]
+        generated_text = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+        return generated_ids, generated_text, output.attentions if output_attentions else None
 
 def create_complete_model(device: str = "cuda", **kwargs) -> CustomModel:
     model = CustomModel(device=device, **kwargs)
