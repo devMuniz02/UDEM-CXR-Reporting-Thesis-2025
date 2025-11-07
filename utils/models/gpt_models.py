@@ -920,7 +920,7 @@ class DinoGPT2Captioner(nn.Module):
         )  # [B, Tvis, Dimg]
         return self.decoder.generate_with_logging(
             visual_tokens=prefix_tokens,
-            input_ids=input_ids,
+            # input_ids=input_ids,
             max_new_tokens=max_new_tokens,
             tokenizer=tokenizer or self.decoder.tokenizer,
             **kwargs
