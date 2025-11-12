@@ -1,0 +1,10 @@
+{
+    "chexbert_f1_weighted": 0.12146792610401465,
+    "chexbert_f1_micro": 0.17418657229922344,
+    "chexbert_f1_macro": 0.08736098135245486,
+    "chexbert_f1_micro_5": 0.21080720480320214,
+    "chexbert_f1_macro_5": 0.10378250080914878,
+    "radgraph_f1_RG_E": 0.17341708483421478,
+    "radgraph_f1_RG_ER": 0.1569506289938329,
+    "training_time_seconds": 1455.7275567054749
+}

@@ -95,7 +95,7 @@ def test_old():
     iteration = 0
 
     with torch.no_grad():
-        for pixel_values, ids_loader, paths, raw_labels in test_loader:
+        for pixel_values, ids_loader, paths, raw_labels in tqdm(test_loader):
             iteration += 1
             pixel_values = pixel_values.to(device)
 
@@ -117,7 +117,7 @@ def test_new(model, test_loader, pad_id, eos_id):
     iteration = 0
 
     with torch.inference_mode():
-        for pixel_values, ids_loader, paths, raw_labels in test_loader:
+        for pixel_values, ids_loader, paths, raw_labels in tqdm(test_loader):
             iteration += 1
             
             pixel_values = pixel_values.to(model.device, non_blocking=True)
@@ -191,43 +191,47 @@ if __name__ == "__main__":
     eos_id = tokenizer.eos_token_id
 
     models = {
-        "LSTM": DinoLSTMAttnCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                d_h=512,
-                pad_id=pad_id,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "BiLSTM": DinoBiLSTMAttnCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                d_h=512,
-                pad_id=pad_id,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "GPT": DinoGPTCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                pad_id=pad_id,
-                d_model=768,
-                n_layer=12,
-                n_head=12,
-                n_prefix=1024,           # number of visual prefix tokens
-                max_seq_len=512,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "GPT2": DinoGPT2Captioner(
-                d_img=384,
-                num_prefix_tokens=512,
-                gpt2_name="gpt2",
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True
-            ).to(device),
+        # "LSTM": DinoLSTMAttnCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         d_h=512,
+        #         pad_id=pad_id,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "BiLSTM": DinoBiLSTMAttnCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         d_h=512,
+        #         pad_id=pad_id,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "GPT": DinoGPTCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         pad_id=pad_id,
+        #         d_model=768,
+        #         n_layer=12,
+        #         n_head=12,
+        #         n_prefix=1024,           # number of visual prefix tokens
+        #         max_seq_len=512,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "GPT2": DinoGPT2Captioner(
+        #         d_img=384,
+        #         num_prefix_tokens=512,
+        #         gpt2_name="gpt2",
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True
+        #     ).to(device),
         "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH),
+        "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, mask_implementation="hidden"),
+        "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, freeze_encoder=False, mask_implementation="hidden"),
+        "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, freeze_encoder=False),
         "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, use_segmentation_mask=False),
+        "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, use_segmentation_mask=False, freeze_encoder=False),
     }
     datasets = ["Chexpert", "MIMIC"]
 
@@ -271,6 +275,20 @@ if __name__ == "__main__":
         for key, model in models.items():
             if os.path.exists(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"):
                 print(f"Model {key} already trained for {FINDINGS_OR_IMPRESSION}, skipping...")
+                if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
+                    print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
+                    continue
+                print(f"Loading model {key} for evaluation...")
+                model.load_state_dict(torch.load(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"))
+                model.to(device)
+                if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
+                    generated_text, target_text = test_old()
+                else:
+                    generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
+                save_and_evaluate_test(generated_text, target_text, training_time=0, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
+                del model
+                torch.cuda.empty_cache()
+                
                 continue
             
             print(f"Training model: {key}")
