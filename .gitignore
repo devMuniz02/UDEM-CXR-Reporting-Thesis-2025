@@ -53,6 +53,3 @@ temp*.py
 
 # Ignore checkpoints folder
 checkpoints/
-
-# Ignore models folder
-models/

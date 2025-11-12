@@ -28,7 +28,7 @@ class DINOEncoder(nn.Module):
         return patches
 
 class DinoUNet(nn.Module):
-    def __init__(self, model_name="facebook/dinov3-convnext-small-pretrain-lvd1689m", freeze=True):
+    def __init__(self, model_name="facebook/dinov3-convnext-small-pretrain-lvd1689m", freeze=True, mask_implementation="default"):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(model_name)
         # NOTE: confirm channels of the chosen hidden state; 768 is common for small convnext/dinov3
@@ -43,6 +43,7 @@ class DinoUNet(nn.Module):
             for m in (self.encoder, self.channel_adapter, self.decoder):
                 for p in m.parameters():
                     p.requires_grad = False
+        self.mask_implementation = mask_implementation
     
     @torch.no_grad()
     def forward(self, x: torch.Tensor, num_layers: int) -> torch.Tensor:
@@ -54,7 +55,7 @@ class DinoUNet(nn.Module):
         feats = next(h for h in reversed(enc_feats.hidden_states) if isinstance(h, torch.Tensor) and h.ndim == 4)
         feats = self.channel_adapter(feats)
         pred = self.decoder(feats)                    # (B,1,h,w)
-        _, _, segmentation_mask = gaussian_layer_stack_pipeline(pred, n_layers = num_layers)
+        _, _, segmentation_mask = gaussian_layer_stack_pipeline(pred, n_layers = num_layers, mask_implementation=self.mask_implementation)  # (B,L,h,w)
         return segmentation_mask    # [B, num_layers, h, w]
 
 
@@ -85,13 +86,14 @@ class CustomModel(nn.Module):
         freeze_decoder: bool = False,
         attention_implementation: str = "sdpa",
         use_segmentation_mask: bool = True,
+        mask_implementation: str = "default",
     ):
         super().__init__()
         self.use_segmentation_mask = use_segmentation_mask
         self.device = torch.device(device)
 
         # Encoder
-        self.encoder = DINOEncoder()
+        self.encoder = DINOEncoder(freeze=freeze_encoder)
         if ENCODER_MODEL_PATH and os.path.exists(ENCODER_MODEL_PATH):
             self.encoder.load_state_dict(torch.load(ENCODER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded encoder weights from", ENCODER_MODEL_PATH)
@@ -99,7 +101,7 @@ class CustomModel(nn.Module):
             self.encoder.eval()
 
         # Segmenter
-        self.segmenter = DinoUNet()
+        self.segmenter = DinoUNet(freeze=freeze_segmenter, mask_implementation=mask_implementation)
         if SEGMENTER_MODEL_PATH and os.path.exists(SEGMENTER_MODEL_PATH):
             self.segmenter.load_state_dict(torch.load(SEGMENTER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded segmenter weights from", SEGMENTER_MODEL_PATH)
@@ -117,7 +119,7 @@ class CustomModel(nn.Module):
         # Linear projection: DINO hidden -> GPT2 hidden
         enc_h = self.encoder.model.config.hidden_size
         dec_h = self.decoder.config.hidden_size
-        self.linear_projection = LinearProjection(input_dim=enc_h, output_dim=dec_h)
+        self.linear_projection = LinearProjection(input_dim=enc_h, output_dim=dec_h, freeze=freeze_linear_projection)
         if LINEAR_PROJECTION_PATH and os.path.exists(LINEAR_PROJECTION_PATH):
             self.linear_projection.load_state_dict(torch.load(LINEAR_PROJECTION_PATH, map_location="cpu"), strict=False)
             print("Loaded linear projection weights from", LINEAR_PROJECTION_PATH)
