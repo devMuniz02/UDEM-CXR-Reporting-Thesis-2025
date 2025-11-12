@@ -12,6 +12,7 @@ def gaussian_layer_stack_pipeline(
     ksize_growth: int = 2,
     sigma: float | None = None,
     eps: float = 1e-8,
+    mask_implementation: str = "default",
 ):
     """
     All-in-one GPU batch pipeline:
@@ -30,6 +31,7 @@ def gaussian_layer_stack_pipeline(
       ksize_growth: increment per layer (e.g., 2) -> ensures odd sizes
       sigma: if None, uses (ksize-1)/6 per layer; else fixed sigma for all
       eps: small number for safe division
+      mask_implementation: "default" (Gaussian layers) or "hidden" (hide token where mask=0) 
 
     Returns:
       stacked: (B, n_layers, 32, 32)  float on x.device
@@ -114,6 +116,14 @@ def gaussian_layer_stack_pipeline(
     # ---- Flatten + tile (expand view; caution w/ later materialization) ----
     flat = stacked.reshape(B, n_layers, 32 * 32)               # (B,L,1024)
     tiled = flat.unsqueeze(-2).expand(-1, -1, 32 * 32, -1)     # (B,L,1024,1024) view
+
+    if mask_implementation == "hidden":
+        dtype_mask=torch.bfloat16 if device.type == "cuda" else torch.float32
+        min_dtype = torch.finfo(dtype_mask).min
+        # we need 0s where the tokens should be taken into account, and -inf otherwise (mask is already of boolean type)
+        stacked = torch.where(stacked > 0, stacked, torch.full_like(stacked, min_dtype))
+        flat = torch.where(flat > 0, flat, torch.full_like(flat, min_dtype))
+        tiled = torch.where(tiled > 0, tiled, torch.full_like(tiled, min_dtype))
 
     return stacked, flat, tiled
 

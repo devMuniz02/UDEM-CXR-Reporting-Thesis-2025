@@ -649,6 +649,7 @@ class VisualPrefixGPT2(nn.Module):
         log_topk: int = 5,
         return_text: bool = True,
         min_gen_before_eos: int = 1,      # ban EOS for first N generated tokens
+        **kwargs
     ) -> dict:
         """
         Logs top-k candidates, entropy, EOS/stop triggers, and repetition stats.
