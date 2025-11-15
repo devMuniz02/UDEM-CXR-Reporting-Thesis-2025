@@ -182,7 +182,8 @@ if __name__ == "__main__":
     NUM_BATCH = 4
     EPOCHS = 20
 
-    SEGMENTER_MODEL_PATH = f"models/dino_unet_decoder_finetuned.pth"
+    SEGMENTER_MODEL_PATH_LUNG = f"models/dino_unet_decoder_finetuned.pth"
+    SEGMENTER_MODEL_PATH_HEART = f"models/dino_unet_organos_best.pth"
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     if tokenizer.pad_token is None:
@@ -191,47 +192,47 @@ if __name__ == "__main__":
     eos_id = tokenizer.eos_token_id
 
     models = {
-        # "LSTM": DinoLSTMAttnCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         d_h=512,
-        #         pad_id=pad_id,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "BiLSTM": DinoBiLSTMAttnCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         d_h=512,
-        #         pad_id=pad_id,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "GPT": DinoGPTCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         pad_id=pad_id,
-        #         d_model=768,
-        #         n_layer=12,
-        #         n_head=12,
-        #         n_prefix=1024,           # number of visual prefix tokens
-        #         max_seq_len=512,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "GPT2": DinoGPT2Captioner(
-        #         d_img=384,
-        #         num_prefix_tokens=512,
-        #         gpt2_name="gpt2",
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True
-        #     ).to(device),
-        "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH),
-        "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, mask_implementation="hidden"),
-        "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, freeze_encoder=False, mask_implementation="hidden"),
-        "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, freeze_encoder=False),
-        "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, use_segmentation_mask=False),
-        "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH=SEGMENTER_MODEL_PATH, use_segmentation_mask=False, freeze_encoder=False),
+        "LSTM": DinoLSTMAttnCaptioner(
+                vocab_size=tokenizer.vocab_size,
+                d_img=384,
+                d_h=512,
+                pad_id=pad_id,
+                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+                freeze_dino=True,
+            ).to(device),
+        "BiLSTM": DinoBiLSTMAttnCaptioner(
+                vocab_size=tokenizer.vocab_size,
+                d_img=384,
+                d_h=512,
+                pad_id=pad_id,
+                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+                freeze_dino=True,
+            ).to(device),
+        "GPT": DinoGPTCaptioner(
+                vocab_size=tokenizer.vocab_size,
+                d_img=384,
+                pad_id=pad_id,
+                d_model=768,
+                n_layer=12,
+                n_head=12,
+                n_prefix=1024,           # number of visual prefix tokens
+                max_seq_len=512,
+                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+                freeze_dino=True,
+            ).to(device),
+        "GPT2": DinoGPT2Captioner(
+                d_img=384,
+                num_prefix_tokens=512,
+                gpt2_name="gpt2",
+                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+                freeze_dino=True
+            ).to(device),
+        "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
+        "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, mask_implementation="hidden"),
+        "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
+        "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
+        "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False, freeze_encoder=False),
     }
     datasets = ["Chexpert", "MIMIC"]
 
@@ -277,6 +278,8 @@ if __name__ == "__main__":
                 print(f"Model {key} already trained for {FINDINGS_OR_IMPRESSION}, skipping...")
                 if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
                     print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
+                    del model
+                    torch.cuda.empty_cache()
                     continue
                 print(f"Loading model {key} for evaluation...")
                 model.load_state_dict(torch.load(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"))
