@@ -12,6 +12,7 @@ class DINOEncoder(nn.Module):
     def __init__(self, model_id="facebook/dinov3-vits16-pretrain-lvd1689m", freeze=True):
         super().__init__()
         self.model = AutoModel.from_pretrained(model_id)
+        self.model.gradient_checkpointing_enable()
         if freeze:
             for p in self.model.parameters():
                 p.requires_grad = False
@@ -27,7 +28,7 @@ class DINOEncoder(nn.Module):
         patches = tokens[:, 5:, :]  # [B, Np, Cenc]
         return patches
 
-class DinoUNet(nn.Module):
+class DinoUNetLung(nn.Module):
     def __init__(self, model_name="facebook/dinov3-convnext-small-pretrain-lvd1689m", freeze=True, mask_implementation="default"):
         super().__init__()
         self.encoder = AutoModel.from_pretrained(model_name)
@@ -46,7 +47,7 @@ class DinoUNet(nn.Module):
         self.mask_implementation = mask_implementation
     
     @torch.no_grad()
-    def forward(self, x: torch.Tensor, num_layers: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         x: [B, C, H, W]; returns mask: [B, 1, H', W'] (your upsampling stack defines H',W')
         """
@@ -55,9 +56,56 @@ class DinoUNet(nn.Module):
         feats = next(h for h in reversed(enc_feats.hidden_states) if isinstance(h, torch.Tensor) and h.ndim == 4)
         feats = self.channel_adapter(feats)
         pred = self.decoder(feats)                    # (B,1,h,w)
-        _, _, segmentation_mask = gaussian_layer_stack_pipeline(pred, n_layers = num_layers, mask_implementation=self.mask_implementation)  # (B,L,h,w)
-        return segmentation_mask    # [B, num_layers, h, w]
+        lung = torch.sigmoid(pred) > 0.5
+        return lung
 
+class DinoUNetHeart(nn.Module):
+    def __init__(self, model_name="facebook/dinov3-convnext-small-pretrain-lvd1689m", num_classes=3, freeze=True):
+        super().__init__()
+        print("🧠 Cargando encoder DINOv3...")
+        self.encoder = AutoModel.from_pretrained(model_name, trust_remote_code=True)
+        self.adapter = nn.Conv2d(768, 512, 1)
+        self.decoder = nn.Sequential(
+            nn.Conv2d(512, 256, 3, padding=1), nn.ReLU(True),
+            nn.ConvTranspose2d(256, 128, 2, 2), nn.ReLU(True),
+            nn.ConvTranspose2d(128, 64,  2, 2), nn.ReLU(True),
+            nn.Conv2d(64, num_classes, 1)
+        )
+        if freeze:
+            for m in (self.encoder, self.adapter, self.decoder):
+                for p in m.parameters():
+                    p.requires_grad = False
+
+    def forward(self, x):
+        enc = self.encoder(x, output_hidden_states=True, return_dict=True)
+        feat = next(h for h in reversed(enc.hidden_states) if isinstance(h, torch.Tensor) and h.ndim == 4)
+        feat = self.adapter(feat)
+        logits = self.decoder(feat)
+        pred = torch.argmax(logits, 1)
+        heart = (pred == 2).unsqueeze(1)
+        return heart
+
+class DinoUNet(nn.Module):
+    def __init__(self, freeze=True, mask_implementation="default"):
+        super().__init__()
+        self.heart_model = DinoUNetHeart(freeze=freeze)
+        self.lung_model = DinoUNetLung(freeze=freeze, mask_implementation=mask_implementation)
+        self.mask_implementation = mask_implementation
+
+    @torch.no_grad()
+    def forward(self, x: torch.Tensor, n_layers: int) -> torch.Tensor:
+        """
+        x: [B, C, H, W]; returns stacked layers: [B, n_layers, 32, 32]
+        """
+        heart_mask = self.heart_model(x)  # (B,1,H,W)
+        lung_mask = self.lung_model(x)    # (B,1,H,W)
+        combined_mask = heart_mask | lung_mask  # (B,1,H,W)
+        stacked_layers, _, _ = gaussian_layer_stack_pipeline(
+            combined_mask.float(),  # (B,1,H,W)
+            n_layers=n_layers,
+            mask_implementation=self.mask_implementation
+        )  # (B,n_layers,32,32)
+        return stacked_layers
 
 class LinearProjection(nn.Module):
     def __init__(self, input_dim=384, output_dim=768, freeze=False):
@@ -77,7 +125,8 @@ class CustomModel(nn.Module):
         self,
         device: str = "cuda",
         ENCODER_MODEL_PATH: str | None = "dino_encoder.pth",
-        SEGMENTER_MODEL_PATH: str | None = "dino_segmenter.pth",
+        SEGMENTER_MODEL_PATH_LUNG: str | None = "dino_segmenter.pth",
+        SEGMENTER_MODEL_PATH_HEART: str | None = "dino_segmenter_heart.pth",
         DECODER_MODEL_PATH: str | None = "dino_decoder.pth",
         LINEAR_PROJECTION_PATH: str | None = "linear_projection.pth",
         freeze_encoder: bool = True,
@@ -102,9 +151,12 @@ class CustomModel(nn.Module):
 
         # Segmenter
         self.segmenter = DinoUNet(freeze=freeze_segmenter, mask_implementation=mask_implementation)
-        if SEGMENTER_MODEL_PATH and os.path.exists(SEGMENTER_MODEL_PATH):
-            self.segmenter.load_state_dict(torch.load(SEGMENTER_MODEL_PATH, map_location="cpu"), strict=False)
-            print("Loaded segmenter weights from", SEGMENTER_MODEL_PATH)
+        if SEGMENTER_MODEL_PATH_HEART and os.path.exists(SEGMENTER_MODEL_PATH_HEART):
+            self.segmenter.heart_model.load_state_dict(torch.load(SEGMENTER_MODEL_PATH_HEART, map_location="cpu"), strict=False)
+            print("Loaded segmenter weights from", SEGMENTER_MODEL_PATH_HEART)
+        if SEGMENTER_MODEL_PATH_LUNG and os.path.exists(SEGMENTER_MODEL_PATH_LUNG):
+            self.segmenter.lung_model.load_state_dict(torch.load(SEGMENTER_MODEL_PATH_LUNG, map_location="cpu"), strict=False)
+            print("Loaded segmenter weights from", SEGMENTER_MODEL_PATH_LUNG)
         if freeze_segmenter:
             self.segmenter.eval()
 
