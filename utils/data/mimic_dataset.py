@@ -45,7 +45,19 @@ class MIMICDataset(Dataset):
         report_path = join_uri(self.reports_dir, f"{rel_dir}.txt")
 
         # Load image
-        im = pil_from_path(image_path)
+        try:
+            im = pil_from_path(image_path)
+        except FileNotFoundError:
+            print(f"[WARN] Image file not found: {image_path}, skipping index {idx}")
+            
+            # Evitar recursión infinita si hay muchos archivos faltantes
+            next_idx = (idx + 1) % len(self.df)
+            if next_idx == idx:
+                # Solo quedaba este elemento y también falta → sí lanzamos error
+                raise FileNotFoundError(f"No valid images found in dataset.")
+            
+            return self.__getitem__(next_idx)
+        
         image = self.transform(im) if self.transform else im
 
         # Load & clean report text (best-effort)
