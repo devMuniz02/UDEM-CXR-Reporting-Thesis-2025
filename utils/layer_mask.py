@@ -121,7 +121,7 @@ def gaussian_layer_stack_pipeline(
         dtype_mask=torch.bfloat16 if device.type == "cuda" else torch.float32
         min_dtype = torch.finfo(dtype_mask).min
         # we need 0s where the tokens should be taken into account, and -inf otherwise (mask is already of boolean type)
-        stacked = torch.where(stacked > 0, stacked, torch.full_like(stacked, min_dtype))
+        stacked = torch.tril(torch.where(stacked > 0, stacked, torch.full_like(stacked, min_dtype)))
         flat = torch.where(flat > 0, flat, torch.full_like(flat, min_dtype))
         tiled = torch.where(tiled > 0, tiled, torch.full_like(tiled, min_dtype))
 
