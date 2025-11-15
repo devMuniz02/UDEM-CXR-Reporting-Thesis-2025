@@ -124,14 +124,38 @@ def create_dataloaders(chexpert_paths,
 #         mimic_paths["mimic_data_path"], 
 #         transform=transform)
     
-#     mixed = ConcatDataset([mimic_ds, chexpert_ds])
+#     if split == "train":
+#         print("Len MIMIC Dataset:", len(mimic_ds), "Len CheXpert Dataset:", len(chexpert_ds))
+#         n1, n2 = len(mimic_ds), len(chexpert_ds)
+#         sampler = None
+#         if n1 / (n1 + n2) < sampling_ratio:  # n1/(n1+n2) is less than sampling ratio
+#             p1, p2 = sampling_ratio, 1 - sampling_ratio  # desired sampling ratio
 
-#     output_loader = DataLoader(
-#         mixed,
-#         batch_size=batch_size,
-#         shuffle=True if split != "test" else False,
-#         **kwargs
-#     )
+#             # per-sample weights: higher weight → sampled more often
+#             w1 = torch.full((n1,), fill_value=p1 / max(n1, 1), dtype=torch.float)
+#             w2 = torch.full((n2,), fill_value=p2 / max(n2, 1), dtype=torch.float)
+#             weights = torch.cat([w1, w2])
+
+#             sampler = WeightedRandomSampler(weights, num_samples=n1 + n2, replacement=True)
+
+#         mixed = ConcatDataset([mimic_ds, chexpert_ds])
+
+#         output_loader = DataLoader(
+#             mixed,
+#             batch_size=batch_size,
+#             shuffle=False,
+#             sampler=sampler,
+#             **kwargs
+#         )
         
-#     return output_loader
+#         return output_loader
+#     else:
+#         output_loader = DataLoader(
+#             mimic_ds,
+#             batch_size=batch_size,
+#             shuffle=True if split != "test" else False,
+#             **kwargs
+#         )
+            
+#         return output_loader
     
