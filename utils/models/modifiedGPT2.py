@@ -414,6 +414,10 @@ class GPT2ModelModified(GPT2Model):
                 # functions expect. This prevents off-by-one shape errors
                 # when using eager attention (torch.where requires same sizes).
                 causal_mask_modified = causal_mask.clone()
+                if causal_mask_modified.dtype == torch.bool:
+                    min_dtype = torch.finfo(segmentation_mask.dtype).min
+                    # we need 0s where the tokens should be taken into account, and -inf otherwise (mask is already of boolean type)
+                    causal_mask_modified = torch.where(causal_mask_modified, torch.tensor(0.0, device=causal_mask_modified.device, dtype=causal_mask_modified.dtype), min_dtype)
                 if getattr(self.config, "prefix_allowed_length", None) is not None:
                     causal_mask_modified[:, :, :, :self.config.prefix_allowed_length].zero_()
 
@@ -426,7 +430,13 @@ class GPT2ModelModified(GPT2Model):
                 _, _, M, N = segmentation_mask.shape
                 M = min(M, causal_mask_modified.shape[2])
                 N = min(N, causal_mask_modified.shape[3])
-                causal_mask_modified[:, :, :M, :N] += segmentation_mask[:, i, :M, :N].unsqueeze(1)
+                try:
+                    causal_mask_modified[:, :, :M, :N] += segmentation_mask[:, i, :M, :N].unsqueeze(1)
+                except Exception as e:
+                    print(f"Error adding segmentation mask at block {i} with shapes causal_mask_modified {causal_mask_modified[:, :, :M, :N].shape} and segmentation_mask {segmentation_mask[:, i, :M, :N].unsqueeze(1).shape}: {e}")
+                    # print the datatypes and devices
+                    print(f"causal_mask_modified dtype: {causal_mask_modified.dtype}, device: {causal_mask_modified.device}")
+                    print(f"segmentation_mask dtype: {segmentation_mask.dtype}, device: {segmentation_mask.device}")
             if getattr(self.config, "plot_attention_mask", False) and i in getattr(self.config, "plot_attention_mask_layer", [0]):
                 if segmentation_mask is not None and causal_mask is not None:
                     print(f"Block {i}: segmentation mask added to causal mask.")
