@@ -1,3 +1,4 @@
+import json
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import pandas as pd
@@ -20,9 +21,26 @@ from utils.models.complete_model import create_complete_model
 from utils.training import train
 
 # CheXpert
+# CHEXPERT_DIR = "Datasets/CheXpertPlus"
+# chexpert_paths = {
+#     "chexpert_data_path": f"{CHEXPERT_DIR}/PNG",  # base PNG folder
+#     "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401_findings.csv",
+# }
+
+# # MIMIC
+# MIMIC_DIR = "Datasets/MIMIC"
+# mimic_paths = {
+#     "mimic_data_path": MIMIC_DIR,
+#     "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
+#     "mimic_metadata_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-metadata-findings-only.csv",
+#     "mimic_reports_path": f"{MIMIC_DIR}/cxr-record-list.csv.gz",  # must contain 'path'
+#     "mimic_images_dir": f"{MIMIC_DIR}/matched_images_and_masks_mimic_224/images",
+# }
+
+# CheXpert
 CHEXPERT_DIR = "Datasets/CheXpertPlus"
 chexpert_paths = {
-    "chexpert_data_path": f"{CHEXPERT_DIR}/PNG",  # base PNG folder
+    "chexpert_data_path": "Datasets/CHEXPERT516",  # base PNG folder
     "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401_findings.csv",
 }
 
@@ -33,7 +51,7 @@ mimic_paths = {
     "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
     "mimic_metadata_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-metadata-findings-only.csv",
     "mimic_reports_path": f"{MIMIC_DIR}/cxr-record-list.csv.gz",  # must contain 'path'
-    "mimic_images_dir": f"{MIMIC_DIR}/matched_images_and_masks_mimic_224/images",
+    "mimic_images_dir": "Datasets/MIMIC516/datos",
 }
 
 def train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=5, num_batches=100, grad_clip=1.0, model_name="Model", findings_or_impression="findings"):
@@ -64,7 +82,7 @@ def train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_
 
     return total_time
 
-def train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=5, num_batches=100, grad_clip=1.0, model_name="ModGPT2", findings_or_impression="findings"):
+def train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=5, num_batches=100, grad_clip=1.0, model_name="ModGPT2", findings_or_impression="findings", resume_from=None):
     time_start = time.time()
     train(
         model=model,
@@ -80,7 +98,7 @@ def train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_
         scheduler=None,
         scheduler_step_on="step",
         early_stopping=None,
-        resume_from=None,  # or model_best.pth if you prefer to start from best weights
+        resume_from=resume_from,  # or model_best.pth if you prefer to start from best weights
     )
 
     time_end = time.time()
@@ -106,7 +124,7 @@ def test_old():
                 tokenizer=tokenizer,
                 preset="safe_sample",
                 stop_sequences=None, #["\n\n", "Impression:"],
-                max_new_tokens=128,
+                max_new_tokens=150,
             )
             generated_text.extend([s["text"]["generated"] for s in info["per_sample"]])
             target_text.extend(raw_labels)
@@ -133,7 +151,7 @@ def test_new(model, test_loader, pad_id, eos_id):
             # Generate (disable all plotting/diagnostics for speed)
             gen_ids = model.decoder.generate(
                 inputs_embeds=projected_patches,
-                max_new_tokens=128,
+                max_new_tokens=150,
                 do_sample=False,
                 top_k=50,
                 top_p=0.95,
@@ -169,6 +187,17 @@ def save_and_evaluate_test(generated_text, target_text, training_time, epochs, k
         print(f"{metric}: {scores}")
     eval_results["training_time_seconds"] = training_time
     save_metrics_to_json(eval_results, f"lstm-vs-gpt/results_complete/{key}_{epochs}_{dataset_test}.json")
+    # Create the dictionary structure you want to read back
+    data_to_save = {
+        "generated": generated_text,
+        "target": target_text,
+    }
+
+    save_json_path = f"lstm-vs-gpt/results_complete/{key}_{epochs}_generated_texts.json"
+    with open(save_json_path, "w") as f:
+        json.dump(data_to_save, f, indent=4)
+
+    print(f"Data saved successfully to {save_json_path} in the requested dictionary format.")
 
 def save_model(model, path):
     torch.save(model.state_dict(), path)
@@ -180,7 +209,7 @@ if __name__ == "__main__":
     os.makedirs("lstm-vs-gpt/runs", exist_ok=True)
     os.makedirs("lstm-vs-gpt/results_complete", exist_ok=True)
     NUM_BATCH = 4
-    EPOCHS = 20
+    EPOCHS = 200
 
     SEGMENTER_MODEL_PATH_LUNG = f"models/dino_unet_decoder_finetuned.pth"
     SEGMENTER_MODEL_PATH_HEART = f"models/dino_unet_organos_best.pth"
@@ -192,49 +221,57 @@ if __name__ == "__main__":
     eos_id = tokenizer.eos_token_id
 
     models = {
-        "LSTM": DinoLSTMAttnCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                d_h=512,
-                pad_id=pad_id,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "BiLSTM": DinoBiLSTMAttnCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                d_h=512,
-                pad_id=pad_id,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "GPT": DinoGPTCaptioner(
-                vocab_size=tokenizer.vocab_size,
-                d_img=384,
-                pad_id=pad_id,
-                d_model=768,
-                n_layer=12,
-                n_head=12,
-                n_prefix=1024,           # number of visual prefix tokens
-                max_seq_len=512,
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True,
-            ).to(device),
-        "GPT2": DinoGPT2Captioner(
-                d_img=384,
-                num_prefix_tokens=512,
-                gpt2_name="gpt2",
-                dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-                freeze_dino=True
-            ).to(device),
-        "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
-        "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, mask_implementation="hidden"),
-        "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
-        "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
-        "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False, freeze_encoder=False),
+        # "LSTM": DinoLSTMAttnCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         d_h=512,
+        #         pad_id=pad_id,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "BiLSTM": DinoBiLSTMAttnCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         d_h=512,
+        #         pad_id=pad_id,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "GPT": DinoGPTCaptioner(
+        #         vocab_size=tokenizer.vocab_size,
+        #         d_img=384,
+        #         pad_id=pad_id,
+        #         d_model=768,
+        #         n_layer=12,
+        #         n_head=12,
+        #         n_prefix=1024,           # number of visual prefix tokens
+        #         max_seq_len=512,
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True,
+        #     ).to(device),
+        # "GPT2": DinoGPT2Captioner(
+        #         d_img=384,
+        #         num_prefix_tokens=512,
+        #         gpt2_name="gpt2",
+        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         freeze_dino=True
+        #     ).to(device),
+        # "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
+        # "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, mask_implementation="hidden"),
+        # "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
+        # "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        # "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
+        # "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False, freeze_encoder=False),
+        # "ModGPT2BOTHDATA": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
+        # "ModGPT2BOTHDATANOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
+        # "ModGPT2BOTHDATADINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        # "ModGPT2BOTHDATADINO40EP": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        # "ModGPT2BOTHDATADINO200EP": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        "ModGPT2BOTHDATADINO50EPLORA": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
+        # "ModGPT2BOTHDATAHIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
+        # "ModGPT2BOTHDATA99": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
     }
-    datasets = ["Chexpert", "MIMIC"]
+    datasets = ["MIMIC"] #["Chexpert", "MIMIC"]
 
     for dataset in datasets:
         if dataset == "Chexpert":
@@ -251,7 +288,7 @@ if __name__ == "__main__":
             mimic_paths, 
             batch_size=NUM_BATCH,
             split="train", 
-            sampling_ratio=0.7,
+            sampling_ratio=0.70,
             findings_or_impression=FINDINGS_OR_IMPRESSION,
         )
 
@@ -274,6 +311,7 @@ if __name__ == "__main__":
         )
 
         for key, model in models.items():
+            checkpoint_path = None
             if os.path.exists(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"):
                 print(f"Model {key} already trained for {FINDINGS_OR_IMPRESSION}, skipping...")
                 if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
@@ -293,7 +331,33 @@ if __name__ == "__main__":
                 torch.cuda.empty_cache()
                 
                 continue
+            else:
+                if os.path.exists(f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"):
+                    print(f"Loading best model for {key} from checkpoint...")
+                    evaluate_only = False
+                    print(f"Loading model {key} for evaluation...")
+                    import fsspec
+                    checkpoint_path = f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"
+                    if evaluate_only:
+                        with fsspec.open(checkpoint_path, mode="rb") as f:
+                            ckpt = torch.load(f, map_location="cpu")
+                        model.load_state_dict(ckpt["model_state_dict"], strict=True)
+                        model.to(device)
+                        if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
+                            generated_text, target_text = test_old()
+                        else:
+                            generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
+                        save_and_evaluate_test(generated_text, target_text, training_time=0, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
+                        del model
+                        torch.cuda.empty_cache()
+                        continue
             
+                    if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
+                        print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
+                        del model
+                        torch.cuda.empty_cache()
+                        continue
+                    
             print(f"Training model: {key}")
             print(f"Model {key} has {sum(p.numel() for p in model.parameters() if p.requires_grad)} trainable parameters.")
             optimizer = torch.optim.AdamW(
@@ -305,7 +369,7 @@ if __name__ == "__main__":
                 generated_text, target_text = test_old()
 
             else:
-                time_training = train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION)
+                time_training = train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION, resume_from=checkpoint_path)
                 generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
 
             save_model(model, f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth")

@@ -1,10 +1,10 @@
 {
-    "chexbert_f1_weighted": 0.19834920634920636,
-    "chexbert_f1_micro": 0.2558139534883721,
-    "chexbert_f1_macro": 0.10124716553287982,
-    "chexbert_f1_micro_5": 0.2857142857142857,
-    "chexbert_f1_macro_5": 0.14444444444444443,
-    "radgraph_f1_RG_E": 0.160370974762938,
-    "radgraph_f1_RG_ER": 0.14728012224983555,
-    "training_time_seconds": 772.0964028835297
+    "chexbert_f1_weighted": 0.228605291005291,
+    "chexbert_f1_micro": 0.35772357723577236,
+    "chexbert_f1_macro": 0.1310355253212396,
+    "chexbert_f1_micro_5": 0.358974358974359,
+    "chexbert_f1_macro_5": 0.24838095238095237,
+    "radgraph_f1_RG_E": 0.14481183775911063,
+    "radgraph_f1_RG_ER": 0.1316214081712219,
+    "training_time_seconds": 5555.6209881305695
 }
