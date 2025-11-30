@@ -227,6 +227,36 @@ def run_train_batch(model, images, findings, optimizer, scheduler, scaler, autoc
 
     return loss.item(), _get_lr(optimizer), _count_nonpad_tokens(tgt_ids, model.pad_token_id)
 
+# def run_train_batch(model, images, findings, scaler, autocast, use_amp, accumulation_steps):
+#     """
+#     Runs a single forward and backward pass for a training step, 
+#     with loss scaled for gradient accumulation.
+#     Returns scaled loss and number of non-pad tokens in targets.
+#     """
+#     tok = model.tokenizer(
+#         findings,
+#         padding=True,
+#         truncation=True,
+#         return_tensors="pt"
+#     )
+#     tgt_ids = tok["input_ids"].to(model.device, non_blocking=True)
+#     images = images.to(model.device, non_blocking=True)
+
+#     with autocast:
+#         output = model(pixel_values=images, tgt_ids=tgt_ids)
+#         # 🔥 CRITICAL FIX: Scale the loss for accumulation
+#         loss = output.loss / accumulation_steps 
+
+#     if use_amp:
+#         scaler.scale(loss).backward()
+#     else:
+#         loss.backward()
+
+#     # NOTE: optimizer.step() and optimizer.zero_grad() are moved to run_epoch
+    
+#     # Return the scaled loss, not the raw one
+#     return loss.item(), _count_nonpad_tokens(tgt_ids, model.pad_token_id)
+
 @torch.inference_mode()  # or @torch.no_grad()
 def run_valid_batch(model, images, findings, autocast):
     """
@@ -334,6 +364,151 @@ def run_epoch(
         print(f"Epoch {epoch} | Validation Loss: {avg_val_loss:.4f} | Validation Tokens: {val_tokens}")
 
     return total_tokens, steps_taken, avg_val_loss
+
+# def run_epoch( 
+#         model,
+#         epoch, 
+#         train_loader,
+#         valid_loader,
+#         do_validate,
+#         optimizer, 
+#         scheduler,
+#         scheduler_step_on: Literal["epoch", "step", "val_metric"],
+#         scaler,
+#         autocast, 
+#         use_amp, 
+#         writer, 
+#         start_step,
+#         cumulative_tokens,
+#         accumulation_steps: int = 64 # 💡 NEW ARGUMENT
+#     ):
+#     """
+#     Runs a single epoch over the training data with gradient accumulation.
+#     """
+#     total_loss_raw = 0.0 # Will store unscaled loss for logging
+#     total_tokens = cumulative_tokens
+#     steps_taken = start_step
+#     model.train()
+    
+#     # The actual number of optimization steps performed
+#     opt_steps_taken = start_step // accumulation_steps 
+
+#     # Zero gradients at the start of the epoch for safety
+#     optimizer.zero_grad(set_to_none=True) 
+
+#     for step, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch} Training", unit="batch")):
+#         images, findings, *_ = batch
+        
+#         # NOTE: run_train_batch now returns SCALED loss
+#         scaled_loss, tokens = run_train_batch(model, images, findings, scaler, autocast, use_amp, accumulation_steps)
+        
+#         # Calculate the raw loss for logging purposes
+#         loss_raw = scaled_loss * accumulation_steps
+        
+#         total_loss_raw += loss_raw
+#         total_tokens += tokens
+        
+#         # --- Optimization Checkpoint ---
+#         # Perform optimization step only after accumulation_steps have passed
+#         if (step + 1) % accumulation_steps == 0:
+#             # Get current LR before step
+#             lr = _get_lr(optimizer) 
+
+#             # Step 1: Perform weight update (and unscale/update scaler if using AMP)
+#             if use_amp:
+#                 scaler.unscale_(optimizer) # Unscale before clipping/stepping if you had clipping
+#                 scaler.step(optimizer)
+#                 scaler.update()
+#             else:
+#                 optimizer.step()
+                
+#             # Step 2: Clear accumulated gradients
+#             optimizer.zero_grad(set_to_none=True)
+            
+#             # Step 3: Step the scheduler if set to 'step'
+#             if scheduler is not None and scheduler_step_on == "step":
+#                  # Use a placeholder metric (like step loss) if ReduceLROnPlateau is used for step-wise update
+#                 if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+#                     scheduler.step(loss_raw)
+#                 else:
+#                     scheduler.step()
+            
+#             # Logging after an optimization step
+#             writer.add_scalar("train/loss_step", loss_raw, opt_steps_taken)
+#             writer.add_scalar("train/lr", lr, opt_steps_taken)
+#             writer.add_scalar("train/tokens_cum", total_tokens, opt_steps_taken)
+#             opt_steps_taken += 1
+            
+#         # Handle the case where the loop finishes mid-accumulation
+#         elif step == len(train_loader) - 1:
+#             # Perform final step and clear gradients
+#             if use_amp:
+#                 scaler.unscale_(optimizer)
+#                 scaler.step(optimizer)
+#                 scaler.update()
+#             else:
+#                 optimizer.step()
+#             optimizer.zero_grad(set_to_none=True)
+            
+#             # Logging for the final partial step (optional, but good practice)
+#             lr = _get_lr(optimizer)
+#             writer.add_scalar("train/loss_step", loss_raw, opt_steps_taken)
+#             writer.add_scalar("train/lr", lr, opt_steps_taken)
+#             writer.add_scalar("train/tokens_cum", total_tokens, opt_steps_taken)
+#             opt_steps_taken += 1
+
+
+#     # --- End of Epoch Logging and Scheduling ---
+#     avg_loss = total_loss_raw / len(train_loader) # Use total batches for avg loss
+#     avg_lr = _get_lr(optimizer)
+    
+#     # Scheduler logic for 'epoch' and 'val_metric' steps (remains similar)
+#     if scheduler is not None and scheduler_step_on == "epoch":
+#         if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+#             scheduler.step(avg_loss)
+#         else:
+#             scheduler.step()
+            
+#     writer.add_scalar("train/loss_epoch", avg_loss, epoch)
+#     writer.add_scalar("train/lr_epoch", avg_lr, epoch)
+#     writer.add_scalar("train/tokens_cum_epoch", total_tokens, epoch)
+#     print(f"Epoch {epoch} | Loss: {avg_loss:.4f} | LR: {avg_lr:.4f} | Tokens: {total_tokens}")
+
+#     # ... Validation logic (unchanged) ...
+#     # (The existing validation logic below is complex due to the scheduler handling, 
+#     # but the core loss calculation for validation does not change.)
+
+#     if do_validate and valid_loader is not None:
+#         model.eval()
+#         val_loss = 0.0
+#         val_tokens = 0
+#         batches_per_epoch = 0
+#         for batch in tqdm(valid_loader, desc=f"Epoch {epoch} Validation", unit="batch"):
+#             batches_per_epoch += 1
+#             images, findings, *_ = batch
+#             loss, tokens = run_valid_batch(model, images, findings, autocast)
+#             val_loss += loss
+#             val_tokens += tokens
+
+#         avg_val_loss = val_loss / len(valid_loader)
+        
+#         # Scheduler on validation metric (ReduceLROnPlateau expects a metric)
+#         if scheduler is not None and scheduler_step_on == "val_metric" and do_validate:
+#             try:
+#                 if hasattr(torch.optim.lr_scheduler, "ReduceLROnPlateau") and isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+#                     scheduler.step(avg_val_loss)
+#                 else:
+#                     try:
+#                         scheduler.step(avg_val_loss)
+#                     except TypeError:
+#                         scheduler.step()
+#             except Exception as e:
+#                 print(f"[WARN] Scheduler step on val_metric failed: {e}")
+#         writer.add_scalar("valid/loss_epoch", avg_val_loss, epoch)
+#         writer.add_scalar("valid/tokens_epoch", val_tokens, epoch)
+#         print(f"Epoch {epoch} | Validation Loss: {avg_val_loss:.4f} | Validation Tokens: {val_tokens}")
+
+#     return total_tokens, steps_taken, avg_val_loss
 
 def _sync_tb_to_gcs(src: str, dst: str) -> None:
     """Sync TensorBoard logs to GCS using gsutil rsync."""
