@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+# from peft import LoraConfig, get_peft_model, PeftModel
 from transformers import AutoModel, GPT2Tokenizer
 
 from utils.models.modifiedGPT2 import create_decoder
@@ -111,6 +112,17 @@ class LinearProjection(nn.Module):
     def __init__(self, input_dim=384, output_dim=768, freeze=False):
         super().__init__()
         self.proj = nn.Linear(input_dim, output_dim)
+        # hidden_dim = (input_dim + output_dim) // 2
+        # # create a MPL-4 adapter
+        # self.proj = nn.Sequential(
+        #     nn.Linear(input_dim, hidden_dim),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(hidden_dim, hidden_dim),
+        #     nn.ReLU(inplace=True),
+        #     nn.Linear(hidden_dim, output_dim),
+        # )
         if freeze:
             for p in self.proj.parameters():
                 p.requires_grad = False
@@ -165,8 +177,67 @@ class CustomModel(nn.Module):
         if DECODER_MODEL_PATH and os.path.exists(DECODER_MODEL_PATH):
             self.decoder.load_state_dict(torch.load(DECODER_MODEL_PATH, map_location="cpu"), strict=False)
             print("Loaded decoder weights from", DECODER_MODEL_PATH)
+        if hasattr(self.decoder.config, 'use_cache'):
+            print("Set use_cache=False for training.")
+            self.decoder.config.use_cache = False
         if freeze_decoder:
             self.decoder.eval()
+
+                # # ----------------------------------------------------
+                # # 2. Decoder (GPT-2)
+                # # ----------------------------------------------------
+                # self.decoder = create_decoder(attention=attention_implementation)
+                # if DECODER_MODEL_PATH and os.path.exists(DECODER_MODEL_PATH):
+                #     self.decoder.load_state_dict(torch.load(DECODER_MODEL_PATH, map_location="cpu"), strict=False)
+                #     print("Loaded decoder weights from", DECODER_MODEL_PATH)
+
+                # # ====================================================
+                # # ⚡️ APPLICATION OF LoRA ⚡️
+                # # ====================================================
+                # use_lora = True
+                # lora_rank = 8
+                # lora_alpha = 16
+                # lora_dropout = 0.1
+                # lora_target_modules = ["c_attn"]#, "q_attn", "k_attn", "v_attn", "o_attn", "c_proj", "q_proj", "k_proj", "v_proj", "o_proj"]
+                # if use_lora and not freeze_decoder:
+                #     print("✨ Applying Low-Rank Adaptation (LoRA).")
+                #     # 1. Create LoRA configuration
+                #     lora_config = LoraConfig(
+                #         r=lora_rank,
+                #         lora_alpha=lora_alpha,
+                #         lora_dropout=lora_dropout,
+                #         bias="none",
+                #         task_type="CAUSAL_LM",
+                #         target_modules=lora_target_modules,
+                #     )
+                #     # 2. Patch the model
+                #     # This freezes the original decoder weights
+                #     self.decoder = get_peft_model(self.decoder, lora_config)
+                    
+                #     # Optional: Print trainable parameters of the PeftModel (LoRA only)
+                #     def print_trainable_parameters(model):
+                #         trainable_params = 0
+                #         all_param = 0
+                #         for _, param in model.named_parameters():
+                #             all_param += param.numel()
+                #             if param.requires_grad:
+                #                 trainable_params += param.numel()
+                #         print(
+                #             f"   Trainable parameters (LoRA): {trainable_params} || Total: {all_param} || Percentage: {100 * trainable_params / all_param:.4f}%"
+                #         )
+                #     print_trainable_parameters(self.decoder)
+                    
+                #     # Disable use_cache if it's a GPT-2 model (required for training)
+                #     if hasattr(self.decoder.config, 'use_cache'):
+                #         print("Set use_cache=False for training.")
+                #         self.decoder.config.use_cache = False
+                
+                # # If LoRA is used, freezing is handled implicitly by PEFT.
+                # # If LoRA is NOT used, but freezing was requested, we handle it like this:
+                # elif freeze_decoder:
+                #     self.decoder.eval()
+                #     for param in self.decoder.parameters():
+                #         param.requires_grad = False
 
         # Linear projection: DINO hidden -> GPT2 hidden
         enc_h = self.encoder.model.config.hidden_size
@@ -236,6 +307,9 @@ class CustomModel(nn.Module):
         pixel_values: [B,C,H,W], float
         returns generated_ids: [B, T]
         """
+        if hasattr(self.decoder.config, 'use_cache'):
+            self.decoder.config.use_cache = True
+            print("Set use_cache=True for generation.")
         pixel_values = pixel_values.to(self.device, non_blocking=True)
 
         # Visual path
