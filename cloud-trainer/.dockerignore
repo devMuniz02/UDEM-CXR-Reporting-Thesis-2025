@@ -1,0 +1,33 @@
+# data and outputs
+Datasets/
+data/
+runs/
+outputs/
+checkpoints/
+wandb/
+
+# virtual envs & caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.cache/
+.pip-cache/
+.pytorch/
+.huggingface/
+
+# git & builds
+.git/
+.gitignore
+dist/
+build/
+*.whl
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+node_modules/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
