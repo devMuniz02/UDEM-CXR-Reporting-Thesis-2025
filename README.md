@@ -1,44 +1,118 @@
-# Chest X-ray Diagnosis and Automated Radiology Report Generation - UDEM PEF-Thesis (Fall-2025)
+# Chest X-ray Diagnosis and Automated Radiology Report Generation - UDEM Thesis (Fall-2025)
 
-## [Project options](https://drive.google.com/file/d/1RG4J-OJZHEcZ6JLumfA0csCI9Gp2dGzf/view?usp=sharing)
+Official repository for the UDEM Fall 2025 thesis project:
 
-![Project Options](assets/ProjectOptions.png)
+**“Automated Diagnosis and Clinical Report Generation of Thoracic Diseases Using Artificial Intelligence.”**  
+**Universidad de Monterrey (UDEM)**
 
-## [Option chosen](https://drive.google.com/file/d/1Gd5-31rOAuWlL_81S1IRSGc9QBF8aOPb/view?usp=sharing)
+This project presents a multimodal architecture that combines a **DINOv3 ViT-S/16 visual encoder**, a **GPT-2 text decoder**, and a novel **layer-wise anatomical attention mechanism** to improve the generation of clinically grounded chest X-ray Findings.
 
-![Option B](assets/OptionChosen.png)
+---
 
-## [Simple workflow](https://drive.google.com/file/d/1NbkvJL-v_InbMioPg1pficEe3plhqRi1/view?usp=sharing)
+# 🚀 Overview
 
-## [Research info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki)
+This work proposes a radiology report generation model that incorporates **explicit anatomical priors** into every transformer layer of a GPT-2 decoder.  
+The goal is to enhance clinical correctness, reduce hallucinations, and improve alignment between visual evidence and generated medical text.
 
-## References of theory
-- Attention for Transformers
-    - [First attention paper](https://arxiv.org/abs/1409.0473)
-    - [First transformer paper](https://arxiv.org/abs/1706.03762)
-    - [First GPT model OpenAi](https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf)
-    - [GPT-2 model OpenAi](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf)
-      - [GPT-2 Model architecture](https://medium.com/%40hsinhungw/gpt-2-detailed-model-architecture-6b1aad33d16b)
-      
-        ![GPT-2 Model architecture](assets/GPT2ModelArchitecture.png)
-- Model architectures
-  - Convolutional Neural Networks
-    - [ResNet](https://arxiv.org/abs/1512.03385)
-    - [UNet](https://arxiv.org/abs/1505.04597)
-- Techniques
-  - Transfer learning
-  - Visual explanations
-      - [Grad-CAM](https://arxiv.org/pdf/1610.02391)
-      - [Grad-CAM++](https://arxiv.org/pdf/1710.11063)
+---
 
-## Things to watch when trainning NN
-- Class imbalances
-  - Test set and validation
-  - Trainning class weights
-- Data filtration
-  - Same patient ID on same set (Train/Val/Test)
+# 🩺 Why Only *Findings*?
+
+This model intentionally focuses **exclusively on generating the Findings section** of radiology reports.
+
+This decision was made to:
+
+- Focus the architecture on a **single, measurable task**
+- Improve descriptive accuracy
+- Reduce hallucinations by tying text strictly to visible structures
+- Enable fair comparisons and ablation experiments
+- Leverage validated clinical NLP tools (CheXbert, RadGraph, CheXpert labeler)
+
+Findings represent the portion of the report that is **directly grounded in the image**, making them ideal for evaluating the effect of anatomical attention.
+
+---
+
+# 🧠 Method Summary
+
+### **1. Visual Encoder (DINOv3 ViT-S/16)**  
+Extracts global and local features from the chest X-ray image.
+
+### **2. Anatomical Mask Construction**  
+A lung–heart segmentation mask is downsampled and progressively smoothed to create a set of priors, one for each GPT-2 decoder layer.  
+Early layers receive broad, diffuse masks; later layers receive more focused ones.
+
+### **3. GPT-2 Decoder With Layer-Wise Anatomical Attention**  
+At each GPT-2 layer, the anatomical prior influences the attention pattern, nudging the model to focus on clinically relevant regions.  
+This improves spatial grounding and reduces inconsistent or irrelevant sentences.
+
+### **4. Autoregressive Findings Generation**  
+During inference, the model generates Findings one token at a time while anatomical priors provide consistent structural guidance.
+
+---
+
+# 📊 Comparison With State of the Art
+
+This project is compared against leading radiology report generation and grounding systems, including:
+
+- **MAIRA-2 (2024)**
+- **MedPaLM-M(2023)**
+- **CheXagent (2023)**
+
+Metrics used:
+
+- **CheXbert F1** — clinical consistency  
+- **RadGraph F1** — entity + relation extraction  
+
+### MIMIC-CXR Test Findings only  
+
+| Metric                     | Our Model | SOTA Score | SOTA Model |
+|----------------------------|---------------|-----------------|------------|
+| **CheXbert F1 (Weighted)** | 33.33         | 50.7            | MAIRA-2    |
+| **CheXbert F1 (Micro)**    | 38.38         | 58.1            | MAIRA-2    |
+| **CheXbert F1 (Macro)**    | 19.61         | 41.6            | MAIRA-2    |
+| **CheXbert F1 (Micro-5)**  | 42.93         | 59.1            | MAIRA-2    |
+| **CheXbert F1 (Macro-5)**  | 31.87         | 51.6            | MedPaLM-M  |
+| **RadGraph F1 (RG-E)**     | 15.83         | 34.6            | MAIRA-2    |
+| **RadGraph F1 (RG-ER)**    | 13.91         | 39.6            | MAIRA-2    |
 
 
+---
+
+# 🧪 Ablation Experiments
+
+To evaluate the impact of anatomical attention, three configurations were tested:
+
+### **1. No Mask Added (Baseline)**  
+- GPT-2 receives only visual embeddings  
+- No anatomical priors  
+- Standard multimodal baseline
+
+### **2. Mask Added (Soft Anatomical Attention)**  
+- Each GPT-2 layer receives its own smoothed anatomical prior  
+- Encourages attention to image regions of interest  
+- Reduces hallucinations and irrelevant sentences
+
+### **3. Mask Added + Hidden Tokens (Strict Masking)**  
+- Same as #2, but tokens outside the mask are suppressed  
+- Forces the decoder to avoid irrelevant anatomical regions  
+- Tests strict spatial grounding vs. soft biasing
+
+![Ablation Study Comparison](assets/barplot_Selected_MIMIC_Models.png)
+
+
+# ⚖️ Dataset Notice
+
+This repository **does not include medical images**.
+Supported datasets:
+
+* **MIMIC-CXR** (PhysioNet credential required)
+* **CheXpert** (Stanford license)
+
+Users must obtain datasets independently.
+
+## [Link to all images / graphs used](https://drive.google.com/file/d/1Gd5-31rOAuWlL_81S1IRSGc9QBF8aOPb/view?usp=sharing)
+
+## [Research Wiki info](https://github.com/devMuniz02/Chest-X-ray-Diagnosis-Automated-Reporting-using-CNNs-and-LLMs---UDEM-PEF-Thesis-Fall-2025/wiki)
 
 # Replication Guide
 
