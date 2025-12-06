@@ -229,7 +229,10 @@ def chexbert_metrics(generated: TextLike, original: TextLike) -> Dict[str, Any]:
         micro_f1_5  = float(class_report_5.get("micro avg",  {}).get("f1-score", 0.0)) if class_report_5 else None
         macro_f1_5  = float(class_report_5.get("macro avg",  {}).get("f1-score", 0.0)) if class_report_5 else None
 
-        per_label_f1 = [float(class_report.get(lbl, {}).get("f1-score", 0.0)) for lbl in _CHEXPERT_14]
+        per_label_f1 = [
+            [class_report.get(lbl, {}).get("f1-score", 0.0), lbl] 
+            for lbl in _CHEXPERT_14
+        ]
         per_pair_micro = [float(x) for x in list(accuracy_not_averaged)]
 
         return {
