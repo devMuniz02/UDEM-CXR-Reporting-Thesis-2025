@@ -133,47 +133,57 @@ def test_old():
 def test_new(model, test_loader, pad_id, eos_id):
     generated_text, target_text = [], []
     iteration = 0
-
+    if hasattr(model.decoder.config, 'use_cache'):
+        model.decoder.config.use_cache = True
+        print("Set use_cache=True for generation.")
+    try:
+        model.decoder.config.use_cache = True
+        print("Set use_cache=True for generation.")
+    except Exception as e:
+        print(f"Could not set use_cache: {e}")
     with torch.inference_mode():
         for pixel_values, ids_loader, paths, raw_labels in tqdm(test_loader):
             iteration += 1
             
-            pixel_values = pixel_values.to(model.device, non_blocking=True)
+            # pixel_values = pixel_values.to(model.device, non_blocking=True)
 
-            # Visual path
-            patches = model.encoder(pixel_values)                           # [B,Np,Cenc]
-            projected_patches = model.linear_projection(patches)            # [B,Np,n_embd]
+            # # Visual path
+            # patches = model.encoder(pixel_values)                           # [B,Np,Cenc]
+            # projected_patches = model.linear_projection(patches)            # [B,Np,n_embd]
 
-            # Segmentation path per layer
-            segmented_layers = model.segmenter(pixel_values, model.num_layers) # [B,n_layers,H,W] (per current decoder)
+            # # Segmentation path per layer
+            # segmented_layers = model.segmenter(pixel_values, model.num_layers) # [B,n_layers,H,W] (per current decoder)
 
 
-            # Generate (disable all plotting/diagnostics for speed)
-            gen_ids = model.decoder.generate(
-                inputs_embeds=projected_patches,
-                max_new_tokens=150,
-                do_sample=False,
-                top_k=50,
-                top_p=0.95,
-                temperature=1.0,
-                repetition_penalty=1.2,
-                num_beams=1,
-                eos_token_id=eos_id,
-                pad_token_id=pad_id,
-                use_cache=True,
-                segmentation_mask=segmented_layers,
-                prefix_allowed_length=0,
-                plot_attention_mask=False,
-                plot_attention_mask_layer=[],
-                plot_attention_map=False,
-                plot_attention_map_layer=[],
-                plot_attention_map_generation=0,
-            )
-            # Move only the ids needed for decoding to CPU
-            texts = model.tokenizer.batch_decode(gen_ids.detach().cpu(), skip_special_tokens=True)
+            # # Generate (disable all plotting/diagnostics for speed)
+            # gen_ids = model.decoder.generate(
+            #     inputs_embeds=projected_patches,
+            #     max_new_tokens=150,
+            #     do_sample=False,
+            #     top_k=50,
+            #     top_p=0.95,
+            #     temperature=1.0,
+            #     repetition_penalty=1.2,
+            #     num_beams=1,
+            #     eos_token_id=eos_id,
+            #     pad_token_id=pad_id,
+            #     use_cache=True,
+            #     segmentation_mask=segmented_layers,
+            #     prefix_allowed_length=0,
+            #     plot_attention_mask=False,
+            #     plot_attention_mask_layer=[],
+            #     plot_attention_map=False,
+            #     plot_attention_map_layer=[],
+            #     plot_attention_map_generation=0,
+            # )
+            # # Move only the ids needed for decoding to CPU
+            # texts = model.tokenizer.batch_decode(gen_ids.detach().cpu(), skip_special_tokens=True)
 
-            # Accumulate for final metric pass (metrics often run on CPU/strings anyway)
-            generated_text.extend(texts)
+            # # Accumulate for final metric pass (metrics often run on CPU/strings anyway)
+            generated_ids, generated_texts, output_attentions = model.generate(pixel_values=pixel_values,
+                                                                              max_new_tokens=150,
+                                                                              output_attentions=False)
+            generated_text.extend(generated_texts)
             target_text.extend(ids_loader)
     return generated_text, target_text
 
@@ -209,7 +219,7 @@ if __name__ == "__main__":
     os.makedirs("lstm-vs-gpt/runs", exist_ok=True)
     os.makedirs("lstm-vs-gpt/results_complete", exist_ok=True)
     NUM_BATCH = 4
-    EPOCHS = 200
+    EPOCHS = 10
 
     SEGMENTER_MODEL_PATH_LUNG = f"models/dino_unet_decoder_finetuned.pth"
     SEGMENTER_MODEL_PATH_HEART = f"models/dino_unet_organos_best.pth"
@@ -220,58 +230,121 @@ if __name__ == "__main__":
     pad_id = tokenizer.pad_token_id
     eos_id = tokenizer.eos_token_id
 
-    models = {
-        # "LSTM": DinoLSTMAttnCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         d_h=512,
-        #         pad_id=pad_id,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "BiLSTM": DinoBiLSTMAttnCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         d_h=512,
-        #         pad_id=pad_id,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "GPT": DinoGPTCaptioner(
-        #         vocab_size=tokenizer.vocab_size,
-        #         d_img=384,
-        #         pad_id=pad_id,
-        #         d_model=768,
-        #         n_layer=12,
-        #         n_head=12,
-        #         n_prefix=1024,           # number of visual prefix tokens
-        #         max_seq_len=512,
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True,
-        #     ).to(device),
-        # "GPT2": DinoGPT2Captioner(
-        #         d_img=384,
-        #         num_prefix_tokens=512,
-        #         gpt2_name="gpt2",
-        #         dino_model_id="facebook/dinov3-vits16-pretrain-lvd1689m",
-        #         freeze_dino=True
-        #     ).to(device),
-        # "ModGPT2": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
-        # "ModGPT2HIDDEN": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, mask_implementation="hidden"),
-        # "ModGPT2HIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
-        # "ModGPT2DINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        # "ModGPT2NOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
-        # "ModGPT2NOMASKDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False, freeze_encoder=False),
-        # "ModGPT2BOTHDATA": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
-        # "ModGPT2BOTHDATANOMASK": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, use_segmentation_mask=False),
-        # "ModGPT2BOTHDATADINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        # "ModGPT2BOTHDATADINO40EP": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        # "ModGPT2BOTHDATADINO200EP": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        "ModGPT2BOTHDATADINO50EPLORA": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False),
-        # "ModGPT2BOTHDATAHIDDENDINO": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART, freeze_encoder=False, mask_implementation="hidden"),
-        # "ModGPT2BOTHDATA99": create_complete_model(device=device, SEGMENTER_MODEL_PATH_LUNG=SEGMENTER_MODEL_PATH_LUNG, SEGMENTER_MODEL_PATH_HEART=SEGMENTER_MODEL_PATH_HEART),
+    # store configs: (callable_builder, kwargs_dict)
+    model_configs = {
+        # "LSTM": {
+        #     "builder": DinoLSTMAttnCaptioner,
+        #     "kwargs": {
+        #         "vocab_size": tokenizer.vocab_size,
+        #         "d_img": 384,
+        #         "d_h": 512,
+        #         "pad_id": pad_id,
+        #         "dino_model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         "freeze_dino": True,
+        #     }
+        # },
+        # "BiLSTM": {
+        #     "builder": DinoBiLSTMAttnCaptioner,
+        #     "kwargs": {
+        #         "vocab_size": tokenizer.vocab_size,
+        #         "d_img": 384,
+        #         "d_h": 512,
+        #         "pad_id": pad_id,
+        #         "dino_model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         "freeze_dino": True,
+        #     }
+        # },
+        # "GPT": {
+        #     "builder": DinoGPTCaptioner,
+        #     "kwargs": {
+        #         "vocab_size": tokenizer.vocab_size,
+        #         "d_img": 384,
+        #         "pad_id": pad_id,
+        #         "d_model": 768,
+        #         "n_layer": 12,
+        #         "n_head": 12,
+        #         "n_prefix": 1024,
+        #         "max_seq_len": 512,
+        #         "dino_model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         "freeze_dino": True,
+        #     }
+        # },
+        # "GPT2": {
+        #     "builder": DinoGPT2Captioner,
+        #     "kwargs": {
+        #         "d_img": 384,
+        #         "num_prefix_tokens": 512,
+        #         "gpt2_name": "gpt2",
+        #         "dino_model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
+        #         "freeze_dino": True
+        #     }
+        # },
+        "SAMEModGPT2": {
+            "builder": create_complete_model,
+            "kwargs": {
+                "device": device,
+                "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+                "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+            }
+        },
+        # "SAMEModGPT2HIDDEN": {
+        #     "builder": create_complete_model,
+        #     "kwargs": {
+        #         "device": device,
+        #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        #         "mask_implementation": "hidden",
+        #     }
+        # },
+        # # "ModGPT2HIDDENBOTHDATA": {
+        # #     "builder": create_complete_model,
+        # #     "kwargs": {
+        # #         "device": device,
+        # #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        # #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        # #         "mask_implementation": "hidden",
+        # #     }
+        # # },
+        # "SAMEModGPT2HIDDENDINO": {
+        #     "builder": create_complete_model,
+        #     "kwargs": {
+        #         "device": device,
+        #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        #         "freeze_encoder": False,
+        #         "mask_implementation": "hidden",
+        #     }
+        # },
+        # "SAMEModGPT2DINO": {
+        #     "builder": create_complete_model,
+        #     "kwargs": {
+        #         "device": device,
+        #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        #         "freeze_encoder": False,
+        #     }
+        # },
+        # "SAMEModGPT2NOMASK": {
+        #     "builder": create_complete_model,
+        #     "kwargs": {
+        #         "device": device,
+        #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        #         "use_segmentation_mask": False,
+        #     }
+        # },
+        # "SAMEModGPT2NOMASKDINO": {
+        #     "builder": create_complete_model,
+        #     "kwargs": {
+        #         "device": device,
+        #         "SEGMENTER_MODEL_PATH_LUNG": SEGMENTER_MODEL_PATH_LUNG,
+        #         "SEGMENTER_MODEL_PATH_HEART": SEGMENTER_MODEL_PATH_HEART,
+        #         "use_segmentation_mask": False,
+        #         "freeze_encoder": False,
+        #     }
+        # },
     }
-    datasets = ["MIMIC"] #["Chexpert", "MIMIC"]
+    datasets = ["MIMIC"]  # ["Chexpert", "MIMIC"]
 
     for dataset in datasets:
         if dataset == "Chexpert":
@@ -280,101 +353,104 @@ if __name__ == "__main__":
         else:
             USE_MIMIC = True
             FINDINGS_OR_IMPRESSION = "findings"
-        print(f"\n\n=== USING DATASET: {dataset} ===\n\n")
-        print(f"Using findings or impression: {FINDINGS_OR_IMPRESSION}")
 
-        train_loader = create_dataloaders(
-            chexpert_paths, 
-            mimic_paths, 
-            batch_size=NUM_BATCH,
-            split="train", 
-            sampling_ratio=0.70,
-            findings_or_impression=FINDINGS_OR_IMPRESSION,
-        )
+        # --- Iterate Over Configurations ---
+        for key, config in model_configs.items():
+            print(f"\n\n=== USING DATASET: {dataset} ===\n\n")
+            print(f"Using findings or impression: {FINDINGS_OR_IMPRESSION}")
 
-        valid_loader = create_dataloaders(
-            chexpert_paths, 
-            mimic_paths,
-            batch_size=NUM_BATCH,
-            split="valid",
-            sampling_ratio=0.7,
-            findings_or_impression=FINDINGS_OR_IMPRESSION,
-        )
+            # --- Create DataLoaders ---
+            train_loader = create_dataloaders(
+                chexpert_paths, mimic_paths, batch_size=NUM_BATCH, split="train", 
+                sampling_ratio=0.70, findings_or_impression=FINDINGS_OR_IMPRESSION
+            )
+            valid_loader = create_dataloaders(
+                chexpert_paths, mimic_paths, batch_size=NUM_BATCH, split="valid",
+                sampling_ratio=0.7, findings_or_impression=FINDINGS_OR_IMPRESSION
+            )
+            test_loader = create_dataloaders(
+                chexpert_paths, mimic_paths, batch_size=NUM_BATCH, split="test", 
+                sampling_ratio=0.7, findings_or_impression=FINDINGS_OR_IMPRESSION
+            )
+            final_model_path = f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"
+            results_path = f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"
+            best_model_path = f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"
+            
+            # 1. OPTIMIZATION: Check if work is totally done
+            if os.path.exists(final_model_path) and os.path.exists(results_path):
+                print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
+                continue
 
-        test_loader = create_dataloaders(
-            chexpert_paths, 
-            mimic_paths, 
-            batch_size=NUM_BATCH,
-            split="test", 
-            sampling_ratio=0.7,
-            findings_or_impression=FINDINGS_OR_IMPRESSION,
-        )
+            # 2. Instantiate the model dynamically
+            print(f"Instantiating model: {key}...")
+            builder = config["builder"]
+            kwargs = config["kwargs"]
+            model = builder(**kwargs).to(device)
 
-        for key, model in models.items():
-            checkpoint_path = None
-            if os.path.exists(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"):
-                print(f"Model {key} already trained for {FINDINGS_OR_IMPRESSION}, skipping...")
-                if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
-                    print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
-                    del model
-                    torch.cuda.empty_cache()
-                    continue
-                print(f"Loading model {key} for evaluation...")
-                model.load_state_dict(torch.load(f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"))
+            # 3. EVALUATION BRANCH (Model is already fully trained)
+            if os.path.exists(final_model_path):
+                print(f"Model {key} already trained for {FINDINGS_OR_IMPRESSION}, loading for final evaluation...")
+                model.load_state_dict(torch.load(final_model_path))
                 model.to(device)
+                
                 if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
                     generated_text, target_text = test_old()
                 else:
                     generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
+                
                 save_and_evaluate_test(generated_text, target_text, training_time=0, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
+                
                 del model
                 torch.cuda.empty_cache()
-                
                 continue
+
+            # 4. TRAINING BRANCH (Train from scratch OR Resume from checkpoint)
             else:
-                if os.path.exists(f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"):
-                    print(f"Loading best model for {key} from checkpoint...")
-                    evaluate_only = False
-                    print(f"Loading model {key} for evaluation...")
-                    import fsspec
-                    checkpoint_path = f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"
-                    if evaluate_only:
-                        with fsspec.open(checkpoint_path, mode="rb") as f:
-                            ckpt = torch.load(f, map_location="cpu")
-                        model.load_state_dict(ckpt["model_state_dict"], strict=True)
-                        model.to(device)
-                        if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
-                            generated_text, target_text = test_old()
-                        else:
-                            generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
-                        save_and_evaluate_test(generated_text, target_text, training_time=0, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
-                        del model
-                        torch.cuda.empty_cache()
-                        continue
-            
-                    if os.path.exists(f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"):
-                        print(f"Results for model {key} already exist for {FINDINGS_OR_IMPRESSION}, skipping...")
-                        del model
-                        torch.cuda.empty_cache()
-                        continue
+                checkpoint_path = None
+                
+                # Check if we can resume from a checkpoint
+                if os.path.exists(best_model_path):
+                    print(f"Found checkpoint for {key} at {best_model_path}. Resuming training...")
+                    checkpoint_path = best_model_path
                     
-            print(f"Training model: {key}")
-            print(f"Model {key} has {sum(p.numel() for p in model.parameters() if p.requires_grad)} trainable parameters.")
-            optimizer = torch.optim.AdamW(
-                filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
-            )
+                    # Load weights into model immediately (ensures model state is correct even if train_func doesn't load it)
+                    ckpt = torch.load(checkpoint_path, map_location=device)
+                    if "model_state_dict" in ckpt:
+                        model.load_state_dict(ckpt["model_state_dict"])
+                    else:
+                        model.load_state_dict(ckpt)
+                else:
+                    print(f"No checkpoint found. Training model {key} from scratch...")
 
-            if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
-                time_training = train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION)
-                generated_text, target_text = test_old()
+                print(f"Model {key} has {sum(p.numel() for p in model.parameters() if p.requires_grad)} trainable parameters.")
+                
+                optimizer = torch.optim.AdamW(
+                    filter(lambda p: p.requires_grad, model.parameters()), lr=3e-4, weight_decay=1e-2
+                )
 
-            else:
-                time_training = train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION, resume_from=checkpoint_path)
-                generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
+                # Start Training
+                if key in ["LSTM", "BiLSTM", "GPT", "GPT2"]:
+                    # For old models, we assume loading state_dict above is enough to resume weights.
+                    # If train_old doesn't handle epoch restoration, it will run for num_epochs more.
+                    time_training = train_old(
+                        model, train_loader, valid_loader, optimizer, device, pad_id, 
+                        num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, 
+                        model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION
+                    )
+                    generated_text, target_text = test_old()
+                else:
+                    # For new models, pass checkpoint_path so train_new can handle optimizer state/epoch restoration
+                    time_training = train_new(
+                        model, train_loader, valid_loader, optimizer, device, pad_id, 
+                        num_epochs=EPOCHS, num_batches=100, grad_clip=1.0, 
+                        model_name=key, findings_or_impression=FINDINGS_OR_IMPRESSION, 
+                        resume_from=checkpoint_path
+                    )
+                    generated_text, target_text = test_new(model, test_loader, pad_id, eos_id)
 
-            save_model(model, f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth")
-            save_and_evaluate_test(generated_text, target_text, time_training, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
+                # Save Final Model & Results
+                save_model(model, final_model_path)
+                save_and_evaluate_test(generated_text, target_text, time_training, epochs=EPOCHS, key=key, use_mimic=USE_MIMIC)
 
-            del model
-            torch.cuda.empty_cache()
-
+                del model
+                torch.cuda.empty_cache()
