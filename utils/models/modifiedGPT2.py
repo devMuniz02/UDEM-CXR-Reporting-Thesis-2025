@@ -571,7 +571,7 @@ class GPT2LMHeadModelModified(GPT2LMHeadModel):
             self.config.plot_attention_map = plot_attention_map
 
         transformer_outputs = self.transformer(
-            input_ids,
+            input_ids=input_ids,
             past_key_values=past_key_values,
             attention_mask=attention_mask,
             cache_position=cache_position,

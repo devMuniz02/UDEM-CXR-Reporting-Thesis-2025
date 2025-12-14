@@ -195,6 +195,14 @@ def run_train_batch(model, images, findings, optimizer, scheduler, scaler, autoc
     Runs a single training step: forward, backward, optimizer step, scheduler step.
     Returns loss, learning rate, and number of non-pad tokens in targets.
     """
+    pixel_values = images.to(model.device, non_blocking=True)
+
+    # Visual path
+    patches = model.encoder(pixel_values)                           # [B,Np,Cenc]
+    projected_patches = model.linear_projection(patches)            # [B,Np,n_embd]
+    # Segmentation path per layer
+    segmented_layers = model.segmenter(pixel_values, model.num_layers) # [B,n_layers,H,W] (per current decoder)
+
     tok = model.tokenizer(
         findings,
         padding=True,
@@ -202,10 +210,28 @@ def run_train_batch(model, images, findings, optimizer, scheduler, scaler, autoc
         return_tensors="pt"
     )
     tgt_ids = tok["input_ids"].to(model.device, non_blocking=True)
-    images = images.to(model.device, non_blocking=True)
+
+    # Text path (optional teacher-forced training)
+    labels = None
+    if tgt_ids is not None:
+        if tgt_ids.dtype != torch.long:
+            tgt_ids = tgt_ids.long()
+        tgt_ids = tgt_ids.to(model.device, non_blocking=True)       # [B,T]
+        text_embeds = model.decoder.transformer.wte(tgt_ids)        # [B,T,n_embd]
+        inputs_embeds = torch.cat([projected_patches, text_embeds], dim=1)  # [B,Np+T,n_embd]
+
+        # Labels: ignore prefix tokens (vision) and PADs in text
+        B, Np, _ = projected_patches.shape
+        labels_prefix = torch.full((B, Np), -100, device=model.device, dtype=torch.long)
+        text_labels = tgt_ids.clone()
+        text_labels[text_labels == model.pad_token_id] = -100       # ✅ compare to ID
+        labels = torch.cat([labels_prefix, text_labels], dim=1)    # [B,Np+T]
+    else:
+        inputs_embeds = projected_patches
 
     with autocast:
-        output = model(pixel_values=images, tgt_ids=tgt_ids)
+        # output = model(pixel_values=images, tgt_ids=tgt_ids)
+        output = model.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers if model.use_segmentation_mask else None, labels=labels)
         loss = output.loss
 
     if use_amp:
@@ -263,6 +289,14 @@ def run_valid_batch(model, images, findings, autocast):
     Runs a single validation step: forward only.
     Returns loss and number of non-pad tokens in targets.
     """
+    pixel_values = images.to(model.device, non_blocking=True)
+
+    # Visual path
+    patches = model.encoder(pixel_values)                           # [B,Np,Cenc]
+    projected_patches = model.linear_projection(patches)            # [B,Np,n_embd]
+    # Segmentation path per layer
+    segmented_layers = model.segmenter(pixel_values, model.num_layers) # [B,n_layers,H,W] (per current decoder)
+
     tok = model.tokenizer(
         findings,
         padding=True,
@@ -272,8 +306,27 @@ def run_valid_batch(model, images, findings, autocast):
     tgt_ids = tok["input_ids"].to(model.device, non_blocking=True)
     images = images.to(model.device, non_blocking=True)
 
+    # Text path (optional teacher-forced training)
+    labels = None
+    if tgt_ids is not None:
+        if tgt_ids.dtype != torch.long:
+            tgt_ids = tgt_ids.long()
+        tgt_ids = tgt_ids.to(model.device, non_blocking=True)       # [B,T]
+        text_embeds = model.decoder.transformer.wte(tgt_ids)        # [B,T,n_embd]
+        inputs_embeds = torch.cat([projected_patches, text_embeds], dim=1)  # [B,Np+T,n_embd]
+
+        # Labels: ignore prefix tokens (vision) and PADs in text
+        B, Np, _ = projected_patches.shape
+        labels_prefix = torch.full((B, Np), -100, device=model.device, dtype=torch.long)
+        text_labels = tgt_ids.clone()
+        text_labels[text_labels == model.pad_token_id] = -100       # ✅ compare to ID
+        labels = torch.cat([labels_prefix, text_labels], dim=1)    # [B,Np+T]
+    else:
+        inputs_embeds = projected_patches
+
     with autocast:
-        output = model(pixel_values=images, tgt_ids=tgt_ids)
+        # output = model(pixel_values=images, tgt_ids=tgt_ids)
+        output = model.decoder(inputs_embeds=inputs_embeds, segmentation_mask=segmented_layers if model.use_segmentation_mask else None, labels=labels)
         loss = output.loss
 
     return loss.item(), _count_nonpad_tokens(tgt_ids, model.pad_token_id)
