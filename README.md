@@ -67,7 +67,6 @@ Metrics used:
 
 | Metric                     | Our Model | SOTA Score | SOTA Model |
 |----------------------------|---------------|-----------------|------------|
-| **CheXbert F1 (Weighted)** | 33.33         | 50.7            | MAIRA-2    |
 | **CheXbert F1 (Micro)**    | 38.38         | 58.1            | MAIRA-2    |
 | **CheXbert F1 (Macro)**    | 19.61         | 41.6            | MAIRA-2    |
 | **CheXbert F1 (Micro-5)**  | 42.93         | 59.1            | MAIRA-2    |
@@ -97,7 +96,7 @@ To evaluate the impact of anatomical attention, three configurations were tested
 - Forces the decoder to avoid irrelevant anatomical regions  
 - Tests strict spatial grounding vs. soft biasing
 
-![Ablation Study Comparison](assets/barplot_Selected_MIMIC_Models.png)
+![Ablation Study Comparison](assets/barplot_MIMIC_Complete_Analysis.png)
 
 
 # ⚖️ Dataset Notice
