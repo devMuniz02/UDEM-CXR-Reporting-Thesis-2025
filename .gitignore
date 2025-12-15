@@ -3,8 +3,13 @@ train1/
 train/
 
 # Ignore dataset folders
-Datasets/
-datasets/
+BIMCV-Padchest-GR/
+CHEXPERT516/
+CheXpertPlus/
+MIMIC/
+MIMIC516/
+NIH/
+PadChest-GR/
 
 # Ignore environment folders
 venv/
