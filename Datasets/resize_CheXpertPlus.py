@@ -9,8 +9,8 @@ import glob
 from tqdm import tqdm
 
 # Create directory if it doesn't exist
-os.makedirs('./Datasets/CheXpertPlus/PNG/PNG', exist_ok=True)
-os.makedirs('./Datasets/CheXpertPlus/PNG/resized/', exist_ok=True)
+os.makedirs('./datasets/CheXpertPlus/PNG/PNG', exist_ok=True)
+os.makedirs('./datasets/CheXpertPlus/PNG/resized/', exist_ok=True)
 
 # Setup logging
 logging.basicConfig(
@@ -173,9 +173,9 @@ def main():
         print("IMAGE RESIZING TOOL")
         print("=" * 60)
         print("This tool will:")
-        print("- Scan for images in ./Datasets/chexpert/")
+        print("- Scan for images in ./datasets/chexpert/")
         print("- Resize them to 512x512 RGB PNG format")
-        print("- Save resized images to ./Datasets/chexpert/resized/")
+        print("- Save resized images to ./datasets/chexpert/resized/")
         print("- Delete original images to save space")
         print("- Log all progress to 'image_resize.log'")
         print("-" * 60)
@@ -184,7 +184,7 @@ def main():
         logger.info("Press Ctrl+C to stop the process at any time")
         
         # Resize all images to 512x512 RGB PNG
-        resize_images_to_rgb_512('./Datasets/CheXpertPlus/PNG/PNG', './Datasets/CheXpertPlus/PNG/resized/')
+        resize_images_to_rgb_512('./datasets/CheXpertPlus/PNG/PNG', './datasets/CheXpertPlus/PNG/resized/')
         
         if not stop_processing:
             print("\n" + "=" * 60)
@@ -192,8 +192,8 @@ def main():
             print("=" * 60)
             logger.info("=== Process completed successfully! ===")
             logger.info("All images have been processed and resized to 512x512 RGB PNG format")
-            logger.info("Original images location: ./Datasets/chexpert/")
-            logger.info("Resized images location: ./Datasets/chexpert/resized/")
+            logger.info("Original images location: ./datasets/chexpert/")
+            logger.info("Resized images location: ./datasets/chexpert/resized/")
         else:
             print("\n" + "=" * 60)
             print("⚠️ PROCESS INTERRUPTED BY USER")

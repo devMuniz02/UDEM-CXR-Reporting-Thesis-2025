@@ -135,13 +135,13 @@ This project uses two publicly available medical imaging datasets: **CheXpertPlu
 4. Download using **AzCopy** from the terminal:
 
    ```bash
-   mkdir -p Datasets/CheXpertPlus
-   azcopy copy "PASTE_FULL_DOWNLOAD_LINK_HERE" "Datasets/CheXpertPlus/" --recursive=false
+   mkdir -p datasets/CheXpertPlus
+   azcopy copy "PASTE_FULL_DOWNLOAD_LINK_HERE" "datasets/CheXpertPlus/" --recursive=false
    ```
 5. Extract and organize the dataset as follows:
 
    ```
-   Datasets/
+   datasets/
    └── CheXpertPlus/
        ├── PNG/
        │   ├── train/
@@ -162,7 +162,7 @@ This project uses two publicly available medical imaging datasets: **CheXpertPlu
 3. Arrange the dataset as:
 
    ```
-   Datasets/
+   datasets/
    └── MIMIC-CXR/
        ├── images/
        │   ├── p10/

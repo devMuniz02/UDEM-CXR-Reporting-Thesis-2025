@@ -61,20 +61,20 @@ if __name__ == "__main__":
     SEGMENTER_MODEL_PATH_HEART = f"models/dino_unet_organos_best.pth"
 
     # CheXpert
-    CHEXPERT_DIR = "Datasets/CheXpertPlus"
+    CHEXPERT_DIR = "datasets/CheXpertPlus"
     chexpert_paths = {
-        "chexpert_data_path": "Datasets/CHEXPERT516",  # base PNG folder
+        "chexpert_data_path": "datasets/CHEXPERT516",  # base PNG folder
         "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401_findings.csv",
     }
 
     # MIMIC
-    MIMIC_DIR = "Datasets/MIMIC"
+    MIMIC_DIR = "datasets/MIMIC"
     mimic_paths = {
         "mimic_data_path": MIMIC_DIR,
         "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
         "mimic_metadata_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-metadata-findings-only.csv",
         "mimic_reports_path": f"{MIMIC_DIR}/cxr-record-list.csv.gz",  # must contain 'path'
-        "mimic_images_dir": "Datasets/MIMIC516/datos",
+        "mimic_images_dir": "datasets/MIMIC516/datos",
     }
 
     # Example usage
