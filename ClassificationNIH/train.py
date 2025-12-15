@@ -40,7 +40,7 @@ CONFIG = {
 # -----------------------------
 # Fixed output/ckpt locations
 # -----------------------------
-OUTPUT_DIR = "train/NIH/DINOv3_1024px"
+OUTPUT_DIR = "train/DINOv3_1024px"
 MODELS_DIR = os.path.join(OUTPUT_DIR, "models")
 RUNS_DIR = os.path.join(OUTPUT_DIR, "runs")
 LATEST_CKPT = os.path.join(MODELS_DIR, "latest.pt")
@@ -167,10 +167,6 @@ def main():
                               batch_size=CONFIG["batch_size"],
                               shuffle=True,
                               num_workers=num_workers)
-    val_loader   = DataLoader(val_dataset,
-                              batch_size=CONFIG["batch_size"],
-                              shuffle=True,
-                              num_workers=num_workers)
     test_loader  = DataLoader(test_dataset,
                               batch_size=CONFIG["batch_size"],
                               shuffle=False,
@@ -225,7 +221,7 @@ def main():
 
     # TensorBoard
     run_name = f"DINOv3_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    writer = SummaryWriter(log_dir=os.path.join(RUNS_DIR, "DINOv3"))
+    writer = SummaryWriter(log_dir=RUNS_DIR)
 
     # Keep a copy for AUC-before vs after
     model_before = copy.deepcopy(model)
