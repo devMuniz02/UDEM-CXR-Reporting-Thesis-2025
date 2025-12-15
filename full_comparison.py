@@ -21,14 +21,14 @@ from utils.models.complete_model import create_complete_model
 from utils.training import train
 
 # CheXpert
-# CHEXPERT_DIR = "datasets/CheXpertPlus"
+# CHEXPERT_DIR = "Datasets/CheXpertPlus"
 # chexpert_paths = {
 #     "chexpert_data_path": f"{CHEXPERT_DIR}/PNG",  # base PNG folder
 #     "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401_findings.csv",
 # }
 
 # # MIMIC
-# MIMIC_DIR = "datasets/MIMIC"
+# MIMIC_DIR = "Datasets/MIMIC"
 # mimic_paths = {
 #     "mimic_data_path": MIMIC_DIR,
 #     "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
@@ -38,20 +38,20 @@ from utils.training import train
 # }
 
 # CheXpert
-CHEXPERT_DIR = "datasets/CheXpertPlus"
+CHEXPERT_DIR = "Datasets/CheXpertPlus"
 chexpert_paths = {
-    "chexpert_data_path": "datasets/CHEXPERT516",  # base PNG folder
+    "chexpert_data_path": "Datasets/CHEXPERT516",  # base PNG folder
     "chexpert_data_csv": f"{CHEXPERT_DIR}/df_chexpert_plus_240401_findings.csv",
 }
 
 # MIMIC
-MIMIC_DIR = "datasets/MIMIC"
+MIMIC_DIR = "Datasets/MIMIC"
 mimic_paths = {
     "mimic_data_path": MIMIC_DIR,
     "mimic_splits_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-split.csv.gz",
     "mimic_metadata_csv": f"{MIMIC_DIR}/mimic-cxr-2.0.0-metadata-findings-only.csv",
     "mimic_reports_path": f"{MIMIC_DIR}/cxr-record-list.csv.gz",  # must contain 'path'
-    "mimic_images_dir": "datasets/MIMIC516/datos",
+    "mimic_images_dir": "Datasets/MIMIC516/datos",
 }
 
 def train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=5, num_batches=100, grad_clip=1.0, model_name="Model", findings_or_impression="findings"):

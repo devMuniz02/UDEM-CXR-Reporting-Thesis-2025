@@ -23,7 +23,7 @@ from utils.classification.torch_train import train_model, eval_model
 # Static config (no argparse)
 # -----------------------------
 CONFIG = {
-    "data_dir": "datasets/NIH",      # path containing images and CSV
+    "data_dir": "Datasets/NIH",      # path containing images and CSV
     "csv_file": "data_clean.csv",
     "model_id": "facebook/dinov3-vits16-pretrain-lvd1689m",
     "batch_size": 64,
@@ -152,7 +152,7 @@ def main():
     pos_w = compute_class_pos_weights(train_df, label_cols, cap=CONFIG["cap_pos_weight"])
     pos_weights = torch.tensor(pos_w, dtype=torch.float32, device=device)
 
-    # datasets & loaders
+    # Datasets & loaders
     train_tf, test_tf = build_transforms(CONFIG["image_size"])
     train_dataset = ChestXrayDataset(train_df, transform=train_tf,  label_cols=label_cols)
     val_dataset   = ChestXrayDataset(val_df,   transform=test_tf,   label_cols=label_cols)
