@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # Path arguments
     parser.add_argument("--models_dir", default="models")
-    parser.add_argument("--log_dir", default="lstm-vs-gpt/runs")
+    parser.add_argument("--log_dir", default="ReportGeneration/training/runs")
     parser.add_argument("--num_trial", default="16")
     parser.add_argument("--best_model_path")
     parser.add_argument("--checkpoint_path")

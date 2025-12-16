@@ -55,7 +55,8 @@ mimic_paths = {
 }
 
 def train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_epochs=5, num_batches=100, grad_clip=1.0, model_name="Model", findings_or_impression="findings"):
-    writer = SummaryWriter(log_dir=f"lstm-vs-gpt/runs/{model_name}_{findings_or_impression}")
+    os.makedirs(f"ReportGeneration/experiments/attention_mask/runs/{model_name}_{findings_or_impression}", exist_ok=True)
+    writer = SummaryWriter(log_dir=f"ReportGeneration/experiments/attention_mask/runs/{model_name}_{findings_or_impression}")
     time_start = time.time()
     best_val_ppl = float("inf")
     for epoch in range(num_epochs):
@@ -72,7 +73,7 @@ def train_old(model, train_loader, valid_loader, optimizer, device, pad_id, num_
         print(f" Val Loss: {val_metrics['val_loss']:.4f}, Val PPL: {val_metrics['val_ppl']:.4f}")
         if val_metrics['val_ppl'] < best_val_ppl:
             best_val_ppl = val_metrics['val_ppl']
-            torch.save(model.state_dict(), f"lstm-vs-gpt/models/best_model_{model_name}_{findings_or_impression}.pth")
+            torch.save(model.state_dict(), f"ReportGeneration/experiments/attention_mask/models/best_model_{model_name}_{findings_or_impression}.pth")
             print("  Saved Best Model")
         writer.add_scalar("Loss/Train", train_metrics['loss'], epoch)
         writer.add_scalar("Loss/Validation", val_metrics['val_loss'], epoch)
@@ -91,8 +92,8 @@ def train_new(model, train_loader, valid_loader, optimizer, device, pad_id, num_
         optimizer=optimizer,
         epochs=num_epochs,              # total target; not "remaining"
         device=device,
-        log_dir=f"lstm-vs-gpt/runs/{model_name}_{findings_or_impression}",       # SAME dir to keep appending
-        checkpoint_path=f"lstm-vs-gpt/models/best_model_{model_name}_{findings_or_impression}.pth",
+        log_dir=f"ReportGeneration/experiments/attention_mask/runs/{model_name}_{findings_or_impression}",       # SAME dir to keep appending
+        checkpoint_path=f"ReportGeneration/experiments/attention_mask/models/best_model_{model_name}_{findings_or_impression}.pth",
         validate_every=1,
         ckpt_every=2,
         scheduler=None,
@@ -196,14 +197,14 @@ def save_and_evaluate_test(generated_text, target_text, training_time, epochs, k
     for metric, scores in eval_results.items():
         print(f"{metric}: {scores}")
     eval_results["training_time_seconds"] = training_time
-    save_metrics_to_json(eval_results, f"lstm-vs-gpt/results_complete/{key}_{epochs}_{dataset_test}.json")
+    save_metrics_to_json(eval_results, f"ReportGeneration/experiments/attention_mask/results_complete/{key}_{epochs}_{dataset_test}.json")
     # Create the dictionary structure you want to read back
     data_to_save = {
         "generated": generated_text,
         "target": target_text,
     }
 
-    save_json_path = f"lstm-vs-gpt/results_complete/{key}_{epochs}_generated_texts.json"
+    save_json_path = f"ReportGeneration/experiments/attention_mask/results_complete/{key}_{epochs}_generated_texts.json"
     with open(save_json_path, "w") as f:
         json.dump(data_to_save, f, indent=4)
 
@@ -215,14 +216,14 @@ def save_model(model, path):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
-    os.makedirs("lstm-vs-gpt/models", exist_ok=True)
-    os.makedirs("lstm-vs-gpt/runs", exist_ok=True)
-    os.makedirs("lstm-vs-gpt/results_complete", exist_ok=True)
+    os.makedirs("ReportGeneration/experiments/attention_mask/models", exist_ok=True)
+    os.makedirs("ReportGeneration/experiments/attention_mask/runs", exist_ok=True)
+    os.makedirs("ReportGeneration/experiments/attention_mask/results_complete", exist_ok=True)
     NUM_BATCH = 4
     EPOCHS = 10
 
-    SEGMENTER_MODEL_PATH_LUNG = f"models/dino_unet_decoder_finetuned.pth"
-    SEGMENTER_MODEL_PATH_HEART = f"models/dino_unet_organos_best.pth"
+    SEGMENTER_MODEL_PATH_LUNG = "models/dino_unet_decoder_finetuned.pth"
+    SEGMENTER_MODEL_PATH_HEART = "models/dino_unet_organos_best.pth"
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     if tokenizer.pad_token is None:
@@ -372,9 +373,9 @@ if __name__ == "__main__":
                 chexpert_paths, mimic_paths, batch_size=NUM_BATCH, split="test", 
                 sampling_ratio=0.7, findings_or_impression=FINDINGS_OR_IMPRESSION
             )
-            final_model_path = f"lstm-vs-gpt/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"
-            results_path = f"lstm-vs-gpt/results_complete/{key}_{EPOCHS}_{dataset}.json"
-            best_model_path = f"lstm-vs-gpt/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"
+            final_model_path = f"ReportGeneration/experiments/attention_mask/models/{key}_final_model_{FINDINGS_OR_IMPRESSION}.pth"
+            results_path = f"ReportGeneration/experiments/attention_mask/results_complete/{key}_{EPOCHS}_{dataset}.json"
+            best_model_path = f"ReportGeneration/experiments/attention_mask/models/best_model_{key}_{FINDINGS_OR_IMPRESSION}.pth"
             
             # 1. OPTIMIZATION: Check if work is totally done
             if os.path.exists(final_model_path) and os.path.exists(results_path):

@@ -396,7 +396,7 @@ def _reset_metric_caches() -> None:
 #     all_metrics = evaluate_all_metrics(generated_reports, original_reports)
 #     for metric, scores in all_metrics.items():
 #         print(f"{metric}: {scores}")
-#     save_metrics_to_json(all_metrics, "lstm-vs-gpt/all_metrics.json")
+#     save_metrics_to_json(all_metrics, "lstm_vs_gpt/all_metrics.json")
 #
 # if __name__ == "__main__":
 #     main()
