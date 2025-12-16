@@ -100,12 +100,12 @@ class DinoUNet(nn.Module):
         heart_mask = self.heart_model(x)  # (B,1,H,W)
         lung_mask = self.lung_model(x)    # (B,1,H,W)
         combined_mask = heart_mask | lung_mask  # (B,1,H,W)
-        stacked_layers, _, _ = gaussian_layer_stack_pipeline(
+        _, _, tiled_layers = gaussian_layer_stack_pipeline(
             combined_mask.float(),  # (B,1,H,W)
             n_layers=n_layers,
             mask_implementation=self.mask_implementation
         )  # (B,n_layers,32,32)
-        return stacked_layers
+        return tiled_layers
 
 class LinearProjection(nn.Module):
     def __init__(self, input_dim=384, output_dim=768, freeze=False):

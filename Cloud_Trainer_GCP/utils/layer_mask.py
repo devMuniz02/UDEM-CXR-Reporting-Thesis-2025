@@ -115,7 +115,7 @@ def gaussian_layer_stack_pipeline(
 
     # ---- Flatten + tile (expand view; caution w/ later materialization) ----
     flat = stacked.reshape(B, n_layers, 32 * 32)               # (B,L,1024)
-    tiled = flat.unsqueeze(-2).expand(-1, -1, 32 * 32, -1)     # (B,L,1024,1024) view
+    tiled = flat.unsqueeze(-2).expand(-1, -1, 2 * 32 * 32, -1)     # (B,L,2048,2048) view
 
     if mask_implementation == "hidden":
         dtype_mask=torch.bfloat16 if device.type == "cuda" else torch.float32
