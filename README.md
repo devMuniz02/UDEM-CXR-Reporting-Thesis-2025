@@ -96,7 +96,7 @@ To evaluate the impact of anatomical attention, three configurations were tested
 - Forces the decoder to avoid irrelevant anatomical regions  
 - Tests strict spatial grounding vs. soft biasing
 
-![Ablation Study Comparison](assets/barplot_MIMIC_Complete_Analysis.png)
+![Ablation Study Comparison](assets/barplot_MIMIC_Complete_Analysis_color.png)
 
 
 # ⚖️ Dataset Notice
