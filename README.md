@@ -41,6 +41,8 @@ Extracts global and local features from the chest X-ray image.
 A lung–heart segmentation mask is downsampled and progressively smoothed to create a set of priors, one for each GPT-2 decoder layer.  
 Early layers receive broad, diffuse masks; later layers receive more focused ones.
 
+![Anatomical Attention](assets/AnatomicalAttention.gif)
+
 ### **3. GPT-2 Decoder With Layer-Wise Anatomical Attention**  
 At each GPT-2 layer, the anatomical prior influences the attention pattern, nudging the model to focus on clinically relevant regions.  
 This improves spatial grounding and reduces inconsistent or irrelevant sentences.
