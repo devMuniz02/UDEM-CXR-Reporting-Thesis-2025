@@ -1,6 +1,11 @@
 # Chest X-ray Diagnosis and Automated Radiology Report Generation - UDEM Thesis (Fall-2025)
 
-Official repository for the UDEM Fall 2025 thesis project:
+## ArXiv
+
+**Radiology Report Generation with Layer-Wise Anatomical Attention** [https://arxiv.org/abs/2512.16841](https://arxiv.org/abs/2512.16841)
+
+
+## Official repository for the UDEM Fall 2025 thesis project:
 
 **“Automated Diagnosis and Clinical Report Generation of Thoracic Diseases Using Artificial Intelligence.”**  
 **Universidad de Monterrey (UDEM)**
